@@ -42,6 +42,10 @@ dependencies {
     implementation(project(":domain"))
     implementation(libs.dagger.hilt.android)
     ksp(libs.hilt.compiler)
+    implementation(libs.security.crypto)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
+    implementation(libs.androidx.datastore.preferences)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

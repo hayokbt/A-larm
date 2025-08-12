@@ -28,3 +28,9 @@ interface ConversationLogRepository {
     suspend fun append(sessionId: SessionId, turn: ConversationTurn)
     suspend fun history(sessionId: SessionId, limit: Int = 50): List<ConversationTurn>
 }
+
+interface LlmApiKeyRepository {
+    suspend fun getKey(): String?
+    suspend fun setKey(key: String?)
+    suspend fun clearKey()
+}

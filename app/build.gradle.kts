@@ -54,6 +54,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.dagger.hilt.android)
     implementation(libs.hilt.navigation.compose)
+    implementation(libs.material.icons.extended)
     ksp(libs.hilt.compiler)
 
     implementation(project(":domain"))

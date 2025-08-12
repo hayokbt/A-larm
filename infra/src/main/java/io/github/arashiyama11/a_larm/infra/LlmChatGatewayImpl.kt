@@ -1,5 +1,6 @@
 package io.github.arashiyama11.a_larm.infra
 
+import io.github.arashiyama11.a_larm.domain.LlmApiKeyRepository
 import io.github.arashiyama11.a_larm.domain.LlmChatGateway
 import io.github.arashiyama11.a_larm.domain.LlmChunk
 import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
@@ -10,7 +11,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
 
-class LlmChatGatewayImpl @Inject constructor() : LlmChatGateway {
+class LlmChatGatewayImpl @Inject constructor(
+    private val llmApiKeyRepositoryImpl: LlmApiKeyRepository
+) : LlmChatGateway {
     override fun streamReply(
         persona: AssistantPersona,
         brief: DayBrief,

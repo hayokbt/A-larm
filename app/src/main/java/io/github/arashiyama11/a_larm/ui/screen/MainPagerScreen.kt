@@ -20,7 +20,9 @@ private enum class MainTab(val title: String) { Home("ホーム"), Settings("設
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun MainPagerScreen() {
+fun MainPagerScreen(
+    navigateToApiKeySetting: () -> Unit,
+) {
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { MainTab.entries.size })
     val scope = rememberCoroutineScope()
 
@@ -42,7 +44,7 @@ fun MainPagerScreen() {
                     }
 
                     MainTab.Settings -> {
-                        SettingsScreen()
+                        SettingsScreen(navigateToApiKeySetting = navigateToApiKeySetting)
                     }
                 }
             }

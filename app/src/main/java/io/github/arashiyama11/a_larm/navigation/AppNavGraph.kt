@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import io.github.arashiyama11.a_larm.ui.screen.fallback.FallbackAlarmScreen
 import io.github.arashiyama11.a_larm.ui.screen.fallback.FallbackAlarmViewModel
 import io.github.arashiyama11.a_larm.ui.screen.MainPagerScreen
+import io.github.arashiyama11.a_larm.ui.screen.apikey.LlmApiKeyScreen
 import io.github.arashiyama11.a_larm.ui.screen.onboarding.OnboardingScreen
 import io.github.arashiyama11.a_larm.ui.screen.session.SessionScreen
 import io.github.arashiyama11.a_larm.ui.screen.session.SessionViewModel
@@ -23,7 +24,11 @@ fun AppNavGraph(
                 navigateToHome = { navController.navigate(Screen.Home.route) }
             )
         }
-        composable(Screen.Home.route) { MainPagerScreen() }
+        composable(Screen.Home.route) {
+            MainPagerScreen {
+                navController.navigate(Screen.ApiKeySetting.route)
+            }
+        }
 
         composable(Screen.Session.route) {
             val vm: SessionViewModel = hiltViewModel()
@@ -33,6 +38,12 @@ fun AppNavGraph(
         composable(Screen.FallbackAlarm.route) {
             val vm: FallbackAlarmViewModel = hiltViewModel()
             FallbackAlarmScreen(state = vm.uiState, onBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.ApiKeySetting.route) {
+            LlmApiKeyScreen {
+                navController.popBackStack()
+            }
         }
     }
 }

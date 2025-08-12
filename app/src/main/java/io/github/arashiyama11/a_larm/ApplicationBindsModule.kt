@@ -6,11 +6,13 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import io.github.arashiyama11.a_larm.alarm.AlarmScheduler
 import io.github.arashiyama11.a_larm.domain.AlarmSchedulerGateway
+import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class ApplicationBindsModule {
 
+    @Singleton
     @Binds
     abstract fun bindAlarmScheduler(impl: AlarmScheduler): AlarmSchedulerGateway
 }

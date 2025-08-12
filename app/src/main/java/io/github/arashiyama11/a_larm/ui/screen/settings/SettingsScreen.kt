@@ -20,6 +20,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun SettingsScreen(
     settingsViewModel: SettingsViewModel = hiltViewModel(),
+    navigateToApiKeySetting: () -> Unit,
 ) {
     val uiState by settingsViewModel.uiState.collectAsStateWithLifecycle()
     Column(
@@ -41,7 +42,7 @@ fun SettingsScreen(
         Text("通知/音量")
         Slider(value = uiState.volume, onValueChange = { /* no-op */ })
         Spacer(Modifier.height(16.dp))
-        Button(onClick = { /* APIキー管理 */ }) { Text("APIキー管理") }
+        Button(onClick = navigateToApiKeySetting) { Text("APIキー管理") }
         Spacer(Modifier.height(16.dp))
         Button(onClick = { /* プライバシー */ }) { Text("プライバシー") }
         Spacer(Modifier.height(16.dp))
