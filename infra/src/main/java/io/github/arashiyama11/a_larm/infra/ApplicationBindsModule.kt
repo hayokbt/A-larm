@@ -67,7 +67,7 @@ abstract class ApplicationBindsModule {
 
     @Binds
     abstract fun bindTtsGateway(
-        impl: FakeTtsGateway
+        impl: TtsGatewayImpl
     ): TtsGateway
 
     @Binds

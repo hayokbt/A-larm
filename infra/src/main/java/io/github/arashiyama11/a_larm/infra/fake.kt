@@ -13,7 +13,6 @@ import io.github.arashiyama11.a_larm.domain.LlmChunk
 import io.github.arashiyama11.a_larm.domain.PersonaRepository
 import io.github.arashiyama11.a_larm.domain.SttGateway
 import io.github.arashiyama11.a_larm.domain.SttResult
-import io.github.arashiyama11.a_larm.domain.TtsGateway
 import io.github.arashiyama11.a_larm.domain.models.AlarmId
 import io.github.arashiyama11.a_larm.domain.models.AlarmRule
 import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
@@ -22,7 +21,6 @@ import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.DayBrief
 import io.github.arashiyama11.a_larm.domain.models.SessionId
 import io.github.arashiyama11.a_larm.domain.models.UserId
-import io.github.arashiyama11.a_larm.domain.models.VoiceStyle
 import io.github.arashiyama11.a_larm.domain.models.VolumeRampPolicy
 import io.github.arashiyama11.a_larm.domain.models.WeeklyHabit
 import kotlinx.coroutines.flow.Flow
@@ -151,15 +149,6 @@ class FakeSttGateway @Inject constructor() : SttGateway {
     }
 }
 
-class FakeTtsGateway @Inject constructor() : TtsGateway {
-    override suspend fun speak(
-        text: String,
-        voice: VoiceStyle?
-    ) {
-        TODO("Not yet implemented")
-    }
-
-}
 
 class FakeLlmChatGateway @Inject constructor() : LlmChatGateway {
     override fun streamReply(

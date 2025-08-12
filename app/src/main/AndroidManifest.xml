@@ -2,6 +2,34 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Core network and audio -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Device capability: Microphone required for voice interaction -->
+    <uses-feature
+        android:name="android.hardware.microphone"
+        android:required="true" />
+
+    <!-- Notifications and full-screen alarm UX -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <!-- Foreground service (base + types for Android 14+) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
+    <!-- Exact alarm scheduling (adjust per要件) -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <!-- Boot completed for re-scheduling alarms -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:name=".MainApplication"
         android:allowBackup="true"
@@ -12,6 +40,22 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Alarm">
+        <receiver
+            android:name=".alarm.AlarmReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".alarm.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".alarm.AlarmService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -23,6 +67,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".alarm.AlarmActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:finishOnTaskLaunch="true"
+            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
+
+
     </application>
 
 </manifest>
