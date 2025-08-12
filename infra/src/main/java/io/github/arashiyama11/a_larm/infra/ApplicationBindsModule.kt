@@ -5,7 +5,6 @@ import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import io.github.arashiyama11.a_larm.domain.AlarmRuleRepository
-import io.github.arashiyama11.a_larm.domain.AlarmSchedulerGateway
 import io.github.arashiyama11.a_larm.domain.AudioOutputGateway
 import io.github.arashiyama11.a_larm.domain.CalendarReadGateway
 import io.github.arashiyama11.a_larm.domain.ConversationLogRepository
@@ -50,10 +49,6 @@ abstract class ApplicationBindsModule {
         impl: FakeDayBriefGateway
     ): DayBriefGateway
 
-    @Binds
-    abstract fun bindAlarmSchedulerGateway(
-        impl: FakeAlarmSchedulerGateway
-    ): AlarmSchedulerGateway
 
     @Binds
     abstract fun bindAudioOutputGateway(

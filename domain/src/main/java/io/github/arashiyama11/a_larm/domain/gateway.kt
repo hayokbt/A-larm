@@ -14,7 +14,6 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 
-
 /** 読み取りだけ（READ_CALENDAR相当は :infra が担保） */
 interface CalendarReadGateway {
     suspend fun eventsOn(date: LocalDate): List<CalendarEvent>
@@ -31,6 +30,7 @@ interface AlarmSchedulerGateway {
     suspend fun cancel(id: AlarmId)
     val triggers: Flow<AlarmTrigger> // OSからの実行トリガ
 }
+
 @OptIn(ExperimentalTime::class)
 data class AlarmTrigger(val at: Instant, val alarmId: AlarmId?)
 
@@ -48,10 +48,11 @@ interface SttGateway {
     fun startStreaming(): Flow<SttResult>
     suspend fun stop()
 }
+
 sealed interface SttResult {
-    data class Partial(val text: String): SttResult
-    data class Final(val text: String): SttResult
-    data class Error(val message: String): SttResult
+    data class Partial(val text: String) : SttResult
+    data class Final(val text: String) : SttResult
+    data class Error(val message: String) : SttResult
 }
 
 interface TtsGateway {
@@ -67,7 +68,8 @@ interface LlmChatGateway {
         history: List<ConversationTurn>
     ): Flow<LlmChunk>
 }
+
 sealed interface LlmChunk {
-    data class Text(val delta: String): LlmChunk
-    data class Error(val message: String): LlmChunk
+    data class Text(val delta: String) : LlmChunk
+    data class Error(val message: String) : LlmChunk
 }

@@ -3,11 +3,14 @@ package io.github.arashiyama11.a_larm.ui.screen.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import io.github.arashiyama11.a_larm.alarm.AlarmScheduler
+import io.github.arashiyama11.a_larm.domain.AlarmSchedulerGateway
 import io.github.arashiyama11.a_larm.domain.TtsGateway
+import io.github.arashiyama11.a_larm.domain.models.AlarmId
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 
 data class SettingsUiState(
@@ -19,7 +22,7 @@ data class SettingsUiState(
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val ttsGateway: TtsGateway,
-    private val alarmScheduler: AlarmScheduler
+    private val alarmScheduler: AlarmSchedulerGateway
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -32,7 +35,11 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setAlarmTest() {
-        alarmScheduler.scheduleAlarm(10000, "Test Alarm")
+        val after10Sec = LocalDateTime.now().plus(10, ChronoUnit.SECONDS)
+
+        viewModelScope.launch {
+            alarmScheduler.scheduleExact(after10Sec, AlarmId("Test Alarm"))
+        }
     }
 }
 
