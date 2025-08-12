@@ -28,23 +28,8 @@ class AlarmActivity : ComponentActivity() {
 
         setContent {
             AlarmTheme {
-                Scaffold() { contentPadding ->
-                    Column(
-                        modifier = androidx.compose.ui.Modifier
-                            .fillMaxSize()
-                            .padding(contentPadding),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text("ここはアラームのUI")
-                        OutlinedButton(
-                            onClick = { finish() },
-                            modifier = androidx.compose.ui.Modifier.padding(8.dp)
-                        ) {
-                            Text("戻る")
-                        }
-
-                    }
+                AlarmScreen {
+                    finish()
                 }
             }
         }

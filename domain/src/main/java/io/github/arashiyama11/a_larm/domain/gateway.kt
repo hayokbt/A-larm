@@ -8,6 +8,7 @@ import io.github.arashiyama11.a_larm.domain.models.DayBrief
 import io.github.arashiyama11.a_larm.domain.models.VoiceStyle
 import io.github.arashiyama11.a_larm.domain.models.VolumeRampPolicy
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlin.time.ExperimentalTime
@@ -38,7 +39,11 @@ data class AlarmTrigger(val at: Instant, val alarmId: AlarmId?)
 interface AudioOutputGateway {
     suspend fun setVolume(level: Int)
     suspend fun ramp(policy: VolumeRampPolicy)
+    
+    suspend fun play(data: ByteArray)
+
     fun supportedRange(): IntRange // 例: 0..15
+
 }
 
 /** STT / TTS / LLM —— それぞれ独立したポートに分離 */
@@ -73,3 +78,51 @@ sealed interface LlmChunk {
     data class Text(val delta: String) : LlmChunk
     data class Error(val message: String) : LlmChunk
 }
+
+interface LlmVoiceChatSessionGateway {
+    suspend fun initialize(
+        persona: AssistantPersona,
+        brief: DayBrief,
+        history: List<ConversationTurn>
+    )
+
+    suspend fun stop()
+
+    val chatState: StateFlow<LlmVoiceChatState>
+    val response: Flow<VoiceChatResponse>
+}
+
+sealed interface VoiceChatResponse {
+    data class Voice(val data: ByteArray) : VoiceChatResponse {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+
+            other as Voice
+
+            if (!data.contentEquals(other.data)) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            return data.contentHashCode()
+        }
+    }
+
+    data class Text(val text: String) : VoiceChatResponse
+
+    data class Error(val message: String) : VoiceChatResponse
+}
+
+
+enum class LlmVoiceChatState {
+    IDLE,
+    INITIALIZING,
+    USER_SPEAKING,
+    ASSISTANT_SPEAKING,
+    STOPPING,
+    ERROR
+}
+
+

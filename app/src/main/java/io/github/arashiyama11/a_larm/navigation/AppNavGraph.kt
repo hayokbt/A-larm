@@ -24,20 +24,11 @@ fun AppNavGraph(
                 navigateToHome = { navController.navigate(Screen.Home.route) }
             )
         }
+        
         composable(Screen.Home.route) {
             MainPagerScreen {
                 navController.navigate(Screen.ApiKeySetting.route)
             }
-        }
-
-        composable(Screen.Session.route) {
-            val vm: SessionViewModel = hiltViewModel()
-            SessionScreen(state = vm.uiState, onBack = { navController.popBackStack() })
-        }
-
-        composable(Screen.FallbackAlarm.route) {
-            val vm: FallbackAlarmViewModel = hiltViewModel()
-            FallbackAlarmScreen(state = vm.uiState, onBack = { navController.popBackStack() })
         }
 
         composable(Screen.ApiKeySetting.route) {
