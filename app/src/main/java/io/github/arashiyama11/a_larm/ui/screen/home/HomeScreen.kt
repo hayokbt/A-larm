@@ -1,28 +1,25 @@
 package io.github.arashiyama11.a_larm.ui.screen.home
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.arashiyama11.a_larm.alarm.AlarmScreen
 
 @Composable
 fun HomeScreen(
@@ -52,39 +49,17 @@ fun HomeScreen(
             //Button(onClick = { onChangeRoutineMode(RoutineMode.Weekly) }) { Text("週単位") }
         }
         Spacer(Modifier.height(8.dp))
-        Text("テキストでのチャット")
-        LazyColumn(
-            modifier = Modifier.weight(1f)
-        ) {
-            items(uiState.history) { turn ->
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = "${turn.role}: ${turn.text}")
-                }
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-        var text by remember { mutableStateOf("") }
-        Row {
-            OutlinedTextField(
-                text, onValueChange = { text = it },
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(Modifier.width(8.dp))
 
-            OutlinedButton(
-                onClick = {
-                    if (text.isNotBlank()) {
-                        homeViewModel.sendMessage(text)
-                        text = ""
-                    }
-                }
-            ) {
-                Text("送信")
-            }
+        Text("デバッグでここにアラーム用UIを表示")
+        Box(
+            modifier = Modifier
+                .border(
+                    1.dp, MaterialTheme.colorScheme.primary,
+                    RoundedCornerShape(4.dp)
+                )
+                .padding(8.dp)
+        ) {
+            AlarmScreen { }
         }
     }
 }

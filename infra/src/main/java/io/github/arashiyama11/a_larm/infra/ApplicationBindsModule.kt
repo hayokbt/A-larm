@@ -12,6 +12,7 @@ import io.github.arashiyama11.a_larm.domain.DayBriefGateway
 import io.github.arashiyama11.a_larm.domain.HabitRepository
 import io.github.arashiyama11.a_larm.domain.LlmApiKeyRepository
 import io.github.arashiyama11.a_larm.domain.LlmChatGateway
+import io.github.arashiyama11.a_larm.domain.LlmVoiceChatSessionGateway
 import io.github.arashiyama11.a_larm.domain.PersonaRepository
 import io.github.arashiyama11.a_larm.domain.SttGateway
 import io.github.arashiyama11.a_larm.domain.TtsGateway
@@ -86,4 +87,9 @@ abstract class ApplicationBindsModule {
     abstract fun bindLlmApiKeyRepository(
         impl: LlmApiKeyRepositoryImpl
     ): LlmApiKeyRepository
+
+    @Binds
+    abstract fun bindLlmVoiceChatSessionGateway(
+        impl: LlmVoiceChatSessionGatewayImpl
+    ): LlmVoiceChatSessionGateway
 }

@@ -39,7 +39,7 @@ data class AlarmTrigger(val at: Instant, val alarmId: AlarmId?)
 interface AudioOutputGateway {
     suspend fun setVolume(level: Int)
     suspend fun ramp(policy: VolumeRampPolicy)
-    
+
     suspend fun play(data: ByteArray)
 
     fun supportedRange(): IntRange // 例: 0..15
@@ -120,6 +120,7 @@ enum class LlmVoiceChatState {
     IDLE,
     INITIALIZING,
     USER_SPEAKING,
+    ASSISTANT_THINKING,
     ASSISTANT_SPEAKING,
     STOPPING,
     ERROR

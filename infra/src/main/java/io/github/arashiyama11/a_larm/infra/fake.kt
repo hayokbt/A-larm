@@ -103,15 +103,16 @@ class FakeDayBriefGateway @Inject constructor() : DayBriefGateway {
 
 class FakeAudioOutputGateway @Inject constructor() : AudioOutputGateway {
     override suspend fun setVolume(level: Int) {
-        TODO("Not yet implemented")
     }
 
     override suspend fun ramp(policy: VolumeRampPolicy) {
-        TODO("Not yet implemented")
     }
 
     override fun supportedRange(): IntRange {
-        TODO("Not yet implemented")
+        return 1..10
+    }
+
+    override suspend fun play(data: ByteArray) {
     }
 
 }
@@ -125,3 +126,4 @@ class FakeSttGateway @Inject constructor() : SttGateway {
         TODO("Not yet implemented")
     }
 }
+
