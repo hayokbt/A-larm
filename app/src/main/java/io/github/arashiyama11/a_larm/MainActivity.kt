@@ -22,8 +22,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        alarmScheduler.scheduleAlarm(10000, "Test Alarm")
-
         setContent {
             AlarmTheme {
                 Surface(color = MaterialTheme.colorScheme.background) {
