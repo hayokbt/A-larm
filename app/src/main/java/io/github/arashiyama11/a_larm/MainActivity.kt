@@ -3,8 +3,6 @@ package io.github.arashiyama11.a_larm
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.Surface
-import androidx.compose.material3.MaterialTheme
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.arashiyama11.a_larm.alarm.AlarmScheduler
@@ -24,15 +22,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AlarmTheme {
-                Surface(color = MaterialTheme.colorScheme.background) {
-                    val start = if (PermissionManager(this).hasAllRequiredPermissions()) {
-                        Screen.Home.route
-                    } else {
-                        Screen.Onboarding.route
-                    }
-                    val navController = rememberNavController()
-                    AppNavGraph(navController = navController, startDestination = start)
+                val start = if (PermissionManager(this).hasAllRequiredPermissions()) {
+                    Screen.Home.route
+                } else {
+                    Screen.Onboarding.route
                 }
+                val navController = rememberNavController()
+                AppNavGraph(navController = navController, startDestination = start)
             }
         }
     }

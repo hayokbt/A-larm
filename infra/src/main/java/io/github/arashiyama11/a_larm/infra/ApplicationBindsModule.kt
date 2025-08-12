@@ -67,6 +67,6 @@ abstract class ApplicationBindsModule {
 
     @Binds
     abstract fun bindLlmChatGateway(
-        impl: FakeLlmChatGateway
+        impl: LlmChatGatewayImpl
     ): LlmChatGateway
 }

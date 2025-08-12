@@ -1,15 +1,11 @@
 package io.github.arashiyama11.a_larm.infra
 
 import io.github.arashiyama11.a_larm.domain.AlarmRuleRepository
-import io.github.arashiyama11.a_larm.domain.AlarmSchedulerGateway
-import io.github.arashiyama11.a_larm.domain.AlarmTrigger
 import io.github.arashiyama11.a_larm.domain.AudioOutputGateway
 import io.github.arashiyama11.a_larm.domain.CalendarReadGateway
 import io.github.arashiyama11.a_larm.domain.ConversationLogRepository
 import io.github.arashiyama11.a_larm.domain.DayBriefGateway
 import io.github.arashiyama11.a_larm.domain.HabitRepository
-import io.github.arashiyama11.a_larm.domain.LlmChatGateway
-import io.github.arashiyama11.a_larm.domain.LlmChunk
 import io.github.arashiyama11.a_larm.domain.PersonaRepository
 import io.github.arashiyama11.a_larm.domain.SttGateway
 import io.github.arashiyama11.a_larm.domain.SttResult
@@ -24,9 +20,7 @@ import io.github.arashiyama11.a_larm.domain.models.UserId
 import io.github.arashiyama11.a_larm.domain.models.VolumeRampPolicy
 import io.github.arashiyama11.a_larm.domain.models.WeeklyHabit
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
 import java.time.LocalDate
-import java.time.LocalDateTime
 import javax.inject.Inject
 
 class FakeHabitRepository @Inject constructor() : HabitRepository {
@@ -107,23 +101,6 @@ class FakeDayBriefGateway @Inject constructor() : DayBriefGateway {
     }
 }
 
-
-class FakeAlarmSchedulerGateway @Inject constructor() : AlarmSchedulerGateway {
-    override suspend fun scheduleExact(
-        at: LocalDateTime,
-        payload: AlarmId?
-    ) {
-        TODO("Not yet implemented")
-    }
-
-    override suspend fun cancel(id: AlarmId) {
-        TODO("Not yet implemented")
-    }
-
-    override val triggers: Flow<AlarmTrigger>
-}
-
-
 class FakeAudioOutputGateway @Inject constructor() : AudioOutputGateway {
     override suspend fun setVolume(level: Int) {
         TODO("Not yet implemented")
@@ -147,22 +124,4 @@ class FakeSttGateway @Inject constructor() : SttGateway {
     override suspend fun stop() {
         TODO("Not yet implemented")
     }
-}
-
-
-class FakeLlmChatGateway @Inject constructor() : LlmChatGateway {
-    override fun streamReply(
-        persona: AssistantPersona,
-        brief: DayBrief,
-        history: List<ConversationTurn>
-    ): Flow<LlmChunk> {
-        var i = 0
-        return flow {
-            while (true) {
-                emit(LlmChunk.Text("これはダミーの応答です。${i++}"))
-                kotlinx.coroutines.delay(1000) // 1秒ごとにダミーのテキストを送信
-            }
-        }
-    }
-
 }
