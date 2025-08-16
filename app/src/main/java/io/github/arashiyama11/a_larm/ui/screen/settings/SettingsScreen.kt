@@ -20,7 +20,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.arashiyama11.a_larm.ui.components.UserProfileForm
-import kotlinx.coroutines.delay
 
 
 @Composable

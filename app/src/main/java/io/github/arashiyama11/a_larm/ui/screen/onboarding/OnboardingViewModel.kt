@@ -148,8 +148,3 @@ class OnboardingViewModel @Inject constructor(
         object OpenExactAlarmSettings : UiEvent
     }
 }
-
-
-private fun validateUserName(name: String): Boolean {
-    return name.isNotBlank() && name.length in 1..50
-}
