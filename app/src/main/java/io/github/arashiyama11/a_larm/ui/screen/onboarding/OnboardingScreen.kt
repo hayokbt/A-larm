@@ -38,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.arashiyama11.a_larm.PermissionManager
 import io.github.arashiyama11.a_larm.domain.models.Gender
 import io.github.arashiyama11.a_larm.ui.theme.AlarmTheme
+import io.github.arashiyama11.a_larm.ui.components.UserProfileForm
 
 @Composable
 fun OnboardingScreen(
@@ -170,79 +171,19 @@ fun UserProfileStep(
     onGenderChange: (Gender) -> Unit,
     onNext: () -> Unit
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            "プロフィールを教えてください",
-            style = MaterialTheme.typography.headlineSmall
-        )
-        Spacer(Modifier.height(16.dp))
-        Text(
-            "あなたに合わせた応答を生成するために利用します。この情報は後から変更できます。",
-            style = MaterialTheme.typography.bodyMedium.copy(color = Color.Gray)
-        )
-        Spacer(Modifier.height(24.dp))
-
-        OutlinedTextField(
-            value = name,
-            onValueChange = onNameChange,
-            label = { Text("名前") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxWidth()) {
-            Text("表示名: $displayName", style = MaterialTheme.typography.bodyLarge)
-        }
-        Spacer(Modifier.height(16.dp))
-
-        Text("性別", style = MaterialTheme.typography.bodyLarge)
-
-
-        Row(Modifier.fillMaxWidth()) {
-            Gender.entries.forEach {
-                Row(
-                    Modifier
-                        .selectable(
-                            selected = (it == gender),
-                            onClick = { onGenderChange(it) }
-                        )
-                        .padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(
-                        selected = (it == gender),
-                        onClick = { onGenderChange(it) }
-                    )
-                    Text(
-                        text = when (it) {
-                            Gender.MALE -> "男性"
-                            Gender.FEMALE -> "女性"
-                            Gender.OTHER -> "その他"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(start = 4.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-        Button(
-            onClick = onNext,
-            enabled = name.isNotBlank() && gender != null,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("次へ")
-        }
-    }
+    UserProfileForm(
+        modifier = modifier,
+        name = name,
+        displayName = displayName,
+        gender = gender,
+        onNameChange = onNameChange,
+        onGenderChange = onGenderChange,
+        onSubmit = onNext,
+        title = "プロフィールを教えてください",
+        description = "あなたに合わせた応答を生成するために利用します。この情報は後から変更できます。",
+        submitLabel = "次へ",
+        fillAndCenter = true
+    )
 }
 
 @Composable
