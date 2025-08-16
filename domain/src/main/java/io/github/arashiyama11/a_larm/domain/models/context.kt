@@ -1,21 +1,28 @@
 package io.github.arashiyama11.a_larm.domain.models
 
-import java.time.DayOfWeek
 import java.time.LocalDateTime
-import java.time.LocalTime
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
+enum class RoutineMode { DAILY, WEEKLY }
+enum class RoutineType { NONE, WAKE, SLEEP, TASK }
 
-data class DailyHabit(
-    val wakeTime: LocalTime,
-    val bedTime: LocalTime? = null,
+data class RoutineEntry(
+    val type: RoutineType = RoutineType.NONE,
+    val label: String = "",
+    val minute: Int = 0
 )
 
-data class WeeklyHabit(
-    val byDay: Map<DayOfWeek, DailyHabit>
-)
+data class CellKey(val dayIndex: Int, val hour: Int) {
+    init {
+        require(dayIndex in 0..6) { "dayIndex must be 0..6 (Mon..Sun)" }
+        require(hour in 0..23) { "hour must be 0..23" }
+    }
+}
+
+typealias RoutineGrid = Map<CellKey, RoutineEntry>
+
 
 /** 当日の状況をまとめてプロンプト文脈に載せるための軽量ブリーフ */
 data class DayBrief(

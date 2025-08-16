@@ -4,24 +4,34 @@ import io.github.arashiyama11.a_larm.domain.models.AlarmId
 import io.github.arashiyama11.a_larm.domain.models.AlarmRule
 import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
+import io.github.arashiyama11.a_larm.domain.models.RoutineGrid
+import io.github.arashiyama11.a_larm.domain.models.RoutineMode
 import io.github.arashiyama11.a_larm.domain.models.SessionId
-import io.github.arashiyama11.a_larm.domain.models.UserId
-import io.github.arashiyama11.a_larm.domain.models.WeeklyHabit
+import kotlinx.coroutines.flow.Flow
 
-interface HabitRepository {
-    suspend fun getWeeklyHabit(userId: UserId): WeeklyHabit?
-    suspend fun upsertWeeklyHabit(userId: UserId, habit: WeeklyHabit)
+
+interface RoutineRepository {
+    suspend fun load(mode: RoutineMode): RoutineGrid
+    suspend fun save(mode: RoutineMode, grid: RoutineGrid)
+
+    suspend fun setRoutineMode(mode: RoutineMode)
+    suspend fun getRoutineMode(): Flow<RoutineMode>
 }
+//
+//interface HabitRepository {
+//    suspend fun getWeeklyHabit(userId: UserId): WeeklyHabit?
+//    suspend fun upsertWeeklyHabit(userId: UserId, habit: WeeklyHabit)
+//}
 
 interface AlarmRuleRepository {
-    suspend fun list(userId: UserId): List<AlarmRule>
-    suspend fun upsert(userId: UserId, rule: AlarmRule)
-    suspend fun remove(userId: UserId, id: AlarmId)
+    suspend fun list(): List<AlarmRule>
+    suspend fun upsert(rule: AlarmRule)
+    suspend fun remove(id: AlarmId)
 }
 
 interface PersonaRepository {
-    suspend fun getCurrent(userId: UserId): AssistantPersona
-    suspend fun setCurrent(userId: UserId, persona: AssistantPersona)
+    suspend fun getCurrent(): AssistantPersona
+    suspend fun setCurrent(persona: AssistantPersona)
 }
 
 interface ConversationLogRepository {

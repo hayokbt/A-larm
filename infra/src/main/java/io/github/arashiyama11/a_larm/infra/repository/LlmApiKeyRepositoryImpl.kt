@@ -30,7 +30,7 @@ class LlmApiKeyRepositoryImpl @Inject constructor(
 ) : LlmApiKeyRepository {
 
     companion object {
-        const val STORE_NAME = "secure_prefs"
+        internal const val STORE_NAME = "secure_prefs"
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val KEY_ALIAS = "llm_api_key_master_aes" // アプリ固有で変更可
         private const val AES_MODE = "AES/GCM/NoPadding"
