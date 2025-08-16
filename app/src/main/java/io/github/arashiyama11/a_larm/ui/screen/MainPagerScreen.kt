@@ -13,10 +13,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import io.github.arashiyama11.a_larm.ui.screen.home.HomeScreen
+import io.github.arashiyama11.a_larm.ui.screen.routine.RoutineScreen
 import io.github.arashiyama11.a_larm.ui.screen.settings.SettingsScreen
 import kotlinx.coroutines.launch
 
-private enum class MainTab(val title: String) { Home("ホーム"), Settings("設定") }
+private enum class MainTab(val title: String) {
+    Home("ホーム"), Routine("ルーチーン設定"), Settings("設定")
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -41,6 +44,10 @@ fun MainPagerScreen(
                 when (MainTab.entries[page]) {
                     MainTab.Home -> {
                         HomeScreen()
+                    }
+
+                    MainTab.Routine -> {
+                        RoutineScreen()
                     }
 
                     MainTab.Settings -> {
