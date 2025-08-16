@@ -1,32 +1,51 @@
 package io.github.arashiyama11.a_larm.infra
 
+import android.content.Context
+import androidx.room.Room
 import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.github.arashiyama11.a_larm.domain.AlarmRuleRepository
 import io.github.arashiyama11.a_larm.domain.AudioOutputGateway
 import io.github.arashiyama11.a_larm.domain.CalendarReadGateway
 import io.github.arashiyama11.a_larm.domain.ConversationLogRepository
 import io.github.arashiyama11.a_larm.domain.DayBriefGateway
-import io.github.arashiyama11.a_larm.domain.HabitRepository
 import io.github.arashiyama11.a_larm.domain.LlmApiKeyRepository
 import io.github.arashiyama11.a_larm.domain.LlmChatGateway
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatSessionGateway
 import io.github.arashiyama11.a_larm.domain.PersonaRepository
+import io.github.arashiyama11.a_larm.domain.RoutineRepository
 import io.github.arashiyama11.a_larm.domain.SttGateway
 import io.github.arashiyama11.a_larm.domain.TtsGateway
 import io.github.arashiyama11.a_larm.infra.repository.LlmApiKeyRepositoryImpl
+import io.github.arashiyama11.a_larm.infra.repository.RoutineRepositoryImpl
+import io.github.arashiyama11.a_larm.infra.room.RoutineDao
+import io.github.arashiyama11.a_larm.infra.room.RoutineDatabase
 import javax.inject.Singleton
+
+@Module
+@InstallIn(SingletonComponent::class)
+object DbModule {
+    @Provides
+    @Singleton
+    fun provideDb(@ApplicationContext ctx: Context): RoutineDatabase =
+        Room.databaseBuilder(ctx, RoutineDatabase::class.java, "routine.db").build()
+
+    @Provides
+    fun provideRoutineDao(db: RoutineDatabase): RoutineDao = db.routineDao()
+}
 
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class ApplicationBindsModule {
     @Singleton
     @Binds
-    abstract fun bindHabitRepository(
-        impl: FakeHabitRepository
-    ): HabitRepository
+    abstract fun bindRoutineRepository(
+        impl: RoutineRepositoryImpl
+    ): RoutineRepository
 
     @Singleton
     @Binds
