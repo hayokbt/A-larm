@@ -7,6 +7,7 @@ import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.RoutineGrid
 import io.github.arashiyama11.a_larm.domain.models.RoutineMode
 import io.github.arashiyama11.a_larm.domain.models.SessionId
+import io.github.arashiyama11.a_larm.domain.models.UserProfile
 import kotlinx.coroutines.flow.Flow
 
 
@@ -43,4 +44,9 @@ interface LlmApiKeyRepository {
     suspend fun getKey(): String?
     suspend fun setKey(key: String?)
     suspend fun clearKey()
+}
+
+interface UserProfileRepository {
+    fun getProfile(): Flow<UserProfile?>
+    suspend fun saveProfile(profile: UserProfile)
 }

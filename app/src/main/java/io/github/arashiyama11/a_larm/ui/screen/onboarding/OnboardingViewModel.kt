@@ -5,29 +5,38 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.arashiyama11.a_larm.PermissionManager
 import io.github.arashiyama11.a_larm.domain.LlmApiKeyRepository
+import io.github.arashiyama11.a_larm.domain.UserProfileRepository
+import io.github.arashiyama11.a_larm.domain.models.Gender
+import io.github.arashiyama11.a_larm.domain.models.UserProfile
+import io.github.arashiyama11.a_larm.util.NameUtils
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 
 enum class OnboardingStep {
-    LOADING, GRANT_PERMISSIONS, GRANT_API_KEY, EXACT_ALARM, COMPLETED
+    LOADING, GRANT_PERMISSIONS, USER_PROFILE, GRANT_API_KEY, EXACT_ALARM, COMPLETED
 }
 
 data class OnboardingUiState(
     val apiKey: String = "",
     val isApiKeySaved: Boolean = false,
-    val phase: OnboardingStep = OnboardingStep.LOADING
+    val phase: OnboardingStep = OnboardingStep.LOADING,
+    val rawName: String = "",
+    val displayName: String = "",
+    val gender: Gender = Gender.OTHER
 )
 
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
     private val llmApiKeyRepository: LlmApiKeyRepository,
-    private val permissionManager: PermissionManager
+    private val permissionManager: PermissionManager,
+    private val userProfileRepository: UserProfileRepository
 ) : ViewModel() {
     private val _events = MutableSharedFlow<UiEvent>()
     val events = _events.asSharedFlow()
@@ -87,16 +96,45 @@ class OnboardingViewModel @Inject constructor(
     private suspend fun calculateStep(): OnboardingStep {
         return when {
             !permissionManager.isMicGranted() || !permissionManager.isNotificationsGranted() -> OnboardingStep.GRANT_PERMISSIONS
+            userProfileRepository.getProfile().first() == null -> OnboardingStep.USER_PROFILE
             llmApiKeyRepository.getKey().isNullOrBlank() -> OnboardingStep.GRANT_API_KEY
             !permissionManager.canScheduleExactAlarms() -> OnboardingStep.EXACT_ALARM
             else -> OnboardingStep.COMPLETED
         }
     }
 
+    fun onNameChange(newName: String) {
+        val display = NameUtils.sanitizeDisplayName(newName)
+        _uiState.update { it.copy(rawName = newName, displayName = display) }
+    }
+
+    fun onGenderChange(newGender: Gender) {
+        _uiState.update { it.copy(gender = newGender) }
+    }
+
     fun updatePhase() {
+
+        val phase = _uiState.value.phase
+
         _uiState.update {
             it.copy(phase = OnboardingStep.LOADING)
         }
+
+        when (phase) {
+            OnboardingStep.USER_PROFILE -> {
+                viewModelScope.launch {
+                    userProfileRepository.saveProfile(
+                        UserProfile(
+                            name = _uiState.value.displayName,
+                            gender = _uiState.value.gender
+                        )
+                    )
+                }
+            }
+
+            else -> {}
+        }
+
         viewModelScope.launch {
             _uiState.update {
                 it.copy(phase = calculateStep())
@@ -109,4 +147,9 @@ class OnboardingViewModel @Inject constructor(
         object RequestRuntimePermissions : UiEvent
         object OpenExactAlarmSettings : UiEvent
     }
+}
+
+
+private fun validateUserName(name: String): Boolean {
+    return name.isNotBlank() && name.length in 1..50
 }

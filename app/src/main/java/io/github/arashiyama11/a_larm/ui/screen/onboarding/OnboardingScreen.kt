@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -34,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.arashiyama11.a_larm.PermissionManager
+import io.github.arashiyama11.a_larm.domain.models.Gender
 import io.github.arashiyama11.a_larm.ui.theme.AlarmTheme
 
 @Composable
@@ -95,6 +98,17 @@ fun OnboardingScreen(
                     requestRuntimePermissions = viewModel::requestRuntimePermissions
                 )
 
+            OnboardingStep.USER_PROFILE ->
+                UserProfileStep(
+                    modifier = Modifier.padding(paddingValues),
+                    name = uiState.rawName,
+                    gender = uiState.gender,
+                    displayName = uiState.displayName,
+                    onNameChange = viewModel::onNameChange,
+                    onGenderChange = viewModel::onGenderChange,
+                    onNext = viewModel::updatePhase
+                )
+
             OnboardingStep.GRANT_API_KEY ->
                 GrantApiKey(
                     modifier = Modifier.padding(paddingValues),
@@ -143,6 +157,91 @@ fun GrantPermissions(modifier: Modifier, requestRuntimePermissions: () -> Unit) 
         )
         Spacer(Modifier.height(16.dp))
         Button(onClick = requestRuntimePermissions) { Text("権限を許可") }
+    }
+}
+
+@Composable
+fun UserProfileStep(
+    modifier: Modifier,
+    name: String,
+    displayName: String,
+    gender: Gender?,
+    onNameChange: (String) -> Unit,
+    onGenderChange: (Gender) -> Unit,
+    onNext: () -> Unit
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            "プロフィールを教えてください",
+            style = MaterialTheme.typography.headlineSmall
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            "あなたに合わせた応答を生成するために利用します。この情報は後から変更できます。",
+            style = MaterialTheme.typography.bodyMedium.copy(color = Color.Gray)
+        )
+        Spacer(Modifier.height(24.dp))
+
+        OutlinedTextField(
+            value = name,
+            onValueChange = onNameChange,
+            label = { Text("名前") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxWidth()) {
+            Text("表示名: $displayName", style = MaterialTheme.typography.bodyLarge)
+        }
+        Spacer(Modifier.height(16.dp))
+
+        Text("性別", style = MaterialTheme.typography.bodyLarge)
+
+
+        Row(Modifier.fillMaxWidth()) {
+            Gender.entries.forEach {
+                Row(
+                    Modifier
+                        .selectable(
+                            selected = (it == gender),
+                            onClick = { onGenderChange(it) }
+                        )
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = (it == gender),
+                        onClick = { onGenderChange(it) }
+                    )
+                    Text(
+                        text = when (it) {
+                            Gender.MALE -> "男性"
+                            Gender.FEMALE -> "女性"
+                            Gender.OTHER -> "その他"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick = onNext,
+            enabled = name.isNotBlank() && gender != null,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("次へ")
+        }
     }
 }
 
