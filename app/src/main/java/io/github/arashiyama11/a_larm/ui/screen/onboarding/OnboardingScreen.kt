@@ -34,7 +34,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.arashiyama11.a_larm.PermissionManager
+import io.github.arashiyama11.a_larm.domain.models.Gender
 import io.github.arashiyama11.a_larm.ui.theme.AlarmTheme
+import io.github.arashiyama11.a_larm.ui.components.UserProfileForm
 
 @Composable
 fun OnboardingScreen(
@@ -95,6 +97,17 @@ fun OnboardingScreen(
                     requestRuntimePermissions = viewModel::requestRuntimePermissions
                 )
 
+            OnboardingStep.USER_PROFILE ->
+                UserProfileStep(
+                    modifier = Modifier.padding(paddingValues),
+                    name = uiState.rawName,
+                    gender = uiState.gender,
+                    displayName = uiState.displayName,
+                    onNameChange = viewModel::onNameChange,
+                    onGenderChange = viewModel::onGenderChange,
+                    onNext = viewModel::updatePhase
+                )
+
             OnboardingStep.GRANT_API_KEY ->
                 GrantApiKey(
                     modifier = Modifier.padding(paddingValues),
@@ -144,6 +157,31 @@ fun GrantPermissions(modifier: Modifier, requestRuntimePermissions: () -> Unit) 
         Spacer(Modifier.height(16.dp))
         Button(onClick = requestRuntimePermissions) { Text("権限を許可") }
     }
+}
+
+@Composable
+fun UserProfileStep(
+    modifier: Modifier,
+    name: String,
+    displayName: String,
+    gender: Gender?,
+    onNameChange: (String) -> Unit,
+    onGenderChange: (Gender) -> Unit,
+    onNext: () -> Unit
+) {
+    UserProfileForm(
+        modifier = modifier,
+        name = name,
+        displayName = displayName,
+        gender = gender,
+        onNameChange = onNameChange,
+        onGenderChange = onGenderChange,
+        onSubmit = onNext,
+        title = "プロフィールを教えてください",
+        description = "あなたに合わせた応答を生成するために利用します。この情報は後から変更できます。",
+        submitLabel = "次へ",
+        fillAndCenter = true
+    )
 }
 
 @Composable

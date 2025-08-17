@@ -5,6 +5,15 @@ import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
+enum class Gender {
+    MALE, FEMALE, OTHER
+}
+
+data class UserProfile(
+    val name: String,
+    val gender: Gender
+)
+
 enum class RoutineMode { DAILY, WEEKLY }
 enum class RoutineType { NONE, WAKE, SLEEP, TASK }
 
@@ -52,3 +61,4 @@ data class ConversationTurn(
     val text: String,
     val at: Instant = Clock.System.now()
 )
+
