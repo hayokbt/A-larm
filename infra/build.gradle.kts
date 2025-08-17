@@ -3,7 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
-    alias(libs.plugins.androidx.room)
+
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -33,10 +34,10 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
+}
 
-    room {
-        schemaDirectory("$projectDir/schemas")
-    }
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -46,11 +47,15 @@ dependencies {
     implementation(libs.material)
     implementation(project(":domain"))
     implementation(libs.dagger.hilt.android)
+    implementation(libs.firebase.crashlytics.buildtools)
     ksp(libs.hilt.compiler)
     implementation(libs.security.crypto)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)
     implementation(libs.androidx.datastore.preferences)
+
+    implementation(libs.okhttp)
+    implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
