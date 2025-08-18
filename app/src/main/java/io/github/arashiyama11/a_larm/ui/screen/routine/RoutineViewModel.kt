@@ -11,7 +11,10 @@ import io.github.arashiyama11.a_larm.domain.models.RoutineMode
 import io.github.arashiyama11.a_larm.domain.models.RoutineType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -37,23 +40,13 @@ class RoutineViewModel @Inject constructor(
     val uiState = _uiState.asStateFlow()
 
     init {
-        load(RoutineMode.DAILY)
-        viewModelScope.launch {
-            val initialMode = routineRepository.getRoutineMode().first()
-            changeMode(initialMode)
-        }
+        routineRepository.getRoutineMode().flatMapLatest { mode ->
+            routineRepository.load(mode).map { it to mode }
+        }.onEach { (grid, mode) ->
+            _uiState.update { it.copy(mode = mode, grid = grid) }
+        }.launchIn(viewModelScope)
     }
 
-    fun changeMode(mode: RoutineMode) {
-        if (mode == _uiState.value.mode) return
-        _uiState.update { it.copy(mode = mode, grid = emptyMap(), editing = null) }
-        load(mode)
-    }
-
-    private fun load(mode: RoutineMode) = viewModelScope.launch {
-        val loaded = routineRepository.load(mode)
-        _uiState.update { it.copy(grid = loaded) }
-    }
 
     fun onCellClick(key: CellKey) {
         val current = _uiState.value.grid[key] ?: RoutineEntry()
@@ -98,6 +91,12 @@ class RoutineViewModel @Inject constructor(
         _uiState.update { st ->
             val e = st.editing ?: return
             st.copy(editing = e.copy(working = e.working.copy(minute = minute.coerceIn(0, 59))))
+        }
+    }
+
+    fun changeMode(mode: RoutineMode) {
+        viewModelScope.launch {
+            routineRepository.setRoutineMode(mode)
         }
     }
 

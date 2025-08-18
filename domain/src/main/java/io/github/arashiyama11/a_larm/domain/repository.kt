@@ -12,11 +12,11 @@ import kotlinx.coroutines.flow.Flow
 
 
 interface RoutineRepository {
-    suspend fun load(mode: RoutineMode): RoutineGrid
+    fun load(mode: RoutineMode): Flow<RoutineGrid>
     suspend fun save(mode: RoutineMode, grid: RoutineGrid)
 
     suspend fun setRoutineMode(mode: RoutineMode)
-    suspend fun getRoutineMode(): Flow<RoutineMode>
+    fun getRoutineMode(): Flow<RoutineMode>
 }
 //
 //interface HabitRepository {

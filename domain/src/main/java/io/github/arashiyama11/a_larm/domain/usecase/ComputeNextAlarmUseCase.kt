@@ -5,7 +5,11 @@ import io.github.arashiyama11.a_larm.domain.models.CellKey
 import io.github.arashiyama11.a_larm.domain.models.RoutineEntry
 import io.github.arashiyama11.a_larm.domain.models.RoutineMode
 import io.github.arashiyama11.a_larm.domain.models.RoutineType
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import java.time.LocalDateTime
 import java.time.LocalTime
 import javax.inject.Inject
@@ -15,18 +19,24 @@ import javax.inject.Singleton
 class ComputeNextAlarmUseCase @Inject constructor(
     private val routineRepository: RoutineRepository
 ) {
+
     /**
      * 「now以降で最も近い起床時刻」を返す
      */
-    suspend fun execute(now: LocalDateTime): LocalDateTime? {
-        val mode = routineRepository.getRoutineMode().first()
-        val grid = routineRepository.load(mode)
-
-        return grid.asSequence()
-            .filter { it.value.type == RoutineType.WAKE }
-            .map { (key, entry) -> nextOccurrence(now, mode, key, entry) }
-            .minOrNull()
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun execute(now: LocalDateTime): Flow<LocalDateTime?> {
+        return routineRepository.getRoutineMode()
+            .flatMapLatest { mode ->
+                routineRepository.load(mode)
+                    .map { grid ->
+                        grid.asSequence()
+                            .filter { it.value.type == RoutineType.WAKE }
+                            .map { (key, entry) -> nextOccurrence(now, mode, key, entry) }
+                            .minOrNull()
+                    }
+            }.distinctUntilChanged()
     }
+
 
     private fun nextOccurrence(
         now: LocalDateTime,

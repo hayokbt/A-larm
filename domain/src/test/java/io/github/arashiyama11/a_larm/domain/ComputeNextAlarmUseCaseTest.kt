@@ -7,6 +7,7 @@ import io.github.arashiyama11.a_larm.domain.models.RoutineMode
 import io.github.arashiyama11.a_larm.domain.models.RoutineType
 import io.github.arashiyama11.a_larm.domain.usecase.ComputeNextAlarmUseCase
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -31,7 +32,7 @@ class ComputeNextAlarmUseCaseTest {
         }
         val now = LocalDateTime.of(2023, 10, 1, 7, 0)
         val useCase = ComputeNextAlarmUseCase(repo)
-        val nextAlarm = useCase.execute(now)
+        val nextAlarm = useCase.execute(now).first()
         assertEquals(
             "Expected next alarm at 07:30 but got $nextAlarm",
             LocalDateTime.of(2023, 10, 1, 7, 30, 0, 0),
@@ -50,7 +51,7 @@ class ComputeNextAlarmUseCaseTest {
         }
         val now = LocalDateTime.of(2023, 10, 1, 7, 0)
         val useCase = ComputeNextAlarmUseCase(repo)
-        val nextAlarm = useCase.execute(now)
+        val nextAlarm = useCase.execute(now).first()
         assertEquals(
             "Expected next alarm to be 07:30",
             now.withHour(7).withMinute(30).withSecond(0).withNano(0),
@@ -69,7 +70,7 @@ class ComputeNextAlarmUseCaseTest {
         }
         val now = LocalDateTime.of(2023, 10, 1, 7, 0)
         val useCase = ComputeNextAlarmUseCase(repo)
-        val nextAlarm = useCase.execute(now)
+        val nextAlarm = useCase.execute(now).first()
         assertEquals(
             "Expected to ignore SLEEP type and return 08:00 alarm",
             now.withHour(8).withMinute(0).withSecond(0).withNano(0),
@@ -89,7 +90,7 @@ class ComputeNextAlarmUseCaseTest {
         // 2023-10-02 is Monday
         val now = LocalDateTime.of(2023, 10, 2, 7, 0)
         val useCase = ComputeNextAlarmUseCase(repo)
-        val nextAlarm = useCase.execute(now)
+        val nextAlarm = useCase.execute(now).first()
         assertEquals(
             "Expected next alarm at 07:30 on the same day",
             now.withHour(7).withMinute(30).withSecond(0).withNano(0),
@@ -111,7 +112,7 @@ class ComputeNextAlarmUseCaseTest {
         // Monday at 08:00
         val now = LocalDateTime.of(2023, 10, 2, 8, 0)
         val useCase = ComputeNextAlarmUseCase(repo)
-        val nextAlarm = useCase.execute(now)
+        val nextAlarm = useCase.execute(now).first()
 
         val expected =
             now.toLocalDate().plusDays(1).atTime(6, 0).withSecond(0).withNano(0) // Tue 06:00
@@ -132,7 +133,7 @@ class ComputeNextAlarmUseCaseTest {
         }
         val now = LocalDateTime.of(2023, 10, 1, 7, 30)
         val useCase = ComputeNextAlarmUseCase(repo)
-        val nextAlarm = useCase.execute(now)
+        val nextAlarm = useCase.execute(now).first()
         assertEquals(
             "Expected next alarm at 08:00",
             now.withHour(8).withMinute(0).withSecond(0).withNano(0),
@@ -154,7 +155,7 @@ class ComputeNextAlarmUseCaseTest {
         // 2023-10-07 is Saturday, at 11:00
         val now = LocalDateTime.of(2023, 10, 7, 11, 0)
         val useCase = ComputeNextAlarmUseCase(repo)
-        val nextAlarm = useCase.execute(now)
+        val nextAlarm = useCase.execute(now).first()
 
         val expected =
             now.toLocalDate().plusDays(2).atTime(6, 0).withSecond(0).withNano(0) // Mon 06:00
@@ -176,7 +177,7 @@ class ComputeNextAlarmUseCaseTest {
         }
         val now = LocalDateTime.of(2023, 10, 1, 22, 0)
         val useCase = ComputeNextAlarmUseCase(repo)
-        val nextAlarm = useCase.execute(now)
+        val nextAlarm = useCase.execute(now).first()
         assertEquals(
             "Expected next alarm at 23:00",
             now.withHour(23).withMinute(0).withSecond(0).withNano(0),
@@ -193,7 +194,7 @@ class ComputeNextAlarmUseCaseTest {
         }
         val now = LocalDateTime.now()
         val useCase = ComputeNextAlarmUseCase(repo)
-        val nextAlarm = useCase.execute(now)
+        val nextAlarm = useCase.execute(now).first()
         assertNull("Expected null when no alarms are set", nextAlarm)
     }
 
@@ -208,7 +209,7 @@ class ComputeNextAlarmUseCaseTest {
         }
         val now = LocalDateTime.of(2023, 10, 1, 7, 30)
         val useCase = ComputeNextAlarmUseCase(repo)
-        val nextAlarm = useCase.execute(now)
+        val nextAlarm = useCase.execute(now).first()
         assertEquals(
             "Spec says 'now 以降' (inclusive). Should select the 07:30 alarm.",
             now.withSecond(0).withNano(0),
@@ -230,7 +231,7 @@ class ComputeNextAlarmUseCaseTest {
         // 2023-10-08 is Sunday at 11:00
         val now = LocalDateTime.of(2023, 10, 8, 11, 0)
         val useCase = ComputeNextAlarmUseCase(repo)
-        val nextAlarm = useCase.execute(now)
+        val nextAlarm = useCase.execute(now).first()
 
         val expected =
             now.toLocalDate().plusDays(1).atTime(6, 0).withSecond(0).withNano(0) // Mon 06:00
@@ -252,8 +253,7 @@ class ComputeNextAlarmUseCaseTest {
         }
         val now = LocalDateTime.of(2023, 10, 1, 23, 0)
         val useCase = ComputeNextAlarmUseCase(repo)
-        val nextAlarm = useCase.execute(now)
-
+        val nextAlarm = useCase.execute(now).first()
         val expected = now.toLocalDate().plusDays(1).atTime(6, 30).withSecond(0).withNano(0)
         assertEquals(
             "Expected next alarm to be 06:30 next day",
@@ -276,7 +276,7 @@ class ComputeNextAlarmUseCaseTest {
         // 2023-10-03 is Tuesday at 12:00
         val now = LocalDateTime.of(2023, 10, 3, 12, 0)
         val useCase = ComputeNextAlarmUseCase(repo)
-        val nextAlarm = useCase.execute(now)
+        val nextAlarm = useCase.execute(now).first()
 
         val expected =
             now.toLocalDate().plusDays(1).atTime(8, 0).withSecond(0).withNano(0) // Wed 08:00
@@ -301,7 +301,7 @@ class ComputeNextAlarmUseCaseTest {
         // 2023-10-03 is Tuesday at 12:00
         val now = LocalDateTime.of(2023, 10, 3, 12, 0)
         val usecase = ComputeNextAlarmUseCase(repo)
-        val nextAlarm = usecase.execute(now)
+        val nextAlarm = usecase.execute(now).first()
 
         val expected =
             now.toLocalDate().plusDays(2).atTime(7, 0).withSecond(0).withNano(0) // Thu 07:00
@@ -318,10 +318,10 @@ class FakeRoutineRepository : RoutineRepository {
     var dayGrid: RoutineGrid = emptyMap()
     var weekGrid: RoutineGrid = emptyMap()
 
-    override suspend fun load(mode: RoutineMode): RoutineGrid {
+    override fun load(mode: RoutineMode): Flow<RoutineGrid> {
         return when (mode) {
-            RoutineMode.DAILY -> dayGrid
-            RoutineMode.WEEKLY -> weekGrid
+            RoutineMode.DAILY -> flowOf(dayGrid)
+            RoutineMode.WEEKLY -> flowOf(weekGrid)
         }
     }
 
@@ -336,7 +336,7 @@ class FakeRoutineRepository : RoutineRepository {
         this.mode = mode
     }
 
-    override suspend fun getRoutineMode(): Flow<RoutineMode> {
+    override fun getRoutineMode(): Flow<RoutineMode> {
         return flowOf(mode)
     }
 }

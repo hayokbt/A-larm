@@ -31,10 +31,12 @@ class RoutineRepositoryImpl @Inject constructor(
 
     private val prefKey = stringPreferencesKey(PREF_NAME)
 
-    override suspend fun load(mode: RoutineMode): RoutineGrid {
-        return dao.getAll(mode).associate { e ->
-            CellKey(dayIndex = e.dayIndex, hour = e.hour) to
-                    RoutineEntry(type = e.type, label = e.label, minute = e.minute)
+    override fun load(mode: RoutineMode): Flow<RoutineGrid> {
+        return dao.getAll(mode).map {
+            it.associate { e ->
+                CellKey(dayIndex = e.dayIndex, hour = e.hour) to
+                        RoutineEntry(type = e.type, label = e.label, minute = e.minute)
+            }
         }
     }
 
@@ -60,14 +62,16 @@ class RoutineRepositoryImpl @Inject constructor(
     }
 
     override suspend fun setRoutineMode(mode: RoutineMode) {
+        println("setRoutineMode: $mode")
         context.dataStore.edit { prefs ->
             prefs[prefKey] = mode.name
         }
     }
 
-    override suspend fun getRoutineMode(): Flow<RoutineMode> {
+    override fun getRoutineMode(): Flow<RoutineMode> {
         return context.dataStore.data
             .map {
+                println("getRoutineMode: ${it[prefKey]}")
                 it[prefKey]?.let { name ->
                     RoutineMode.valueOf(name)
                 } ?: RoutineMode.DAILY

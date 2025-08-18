@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +26,12 @@ import io.github.arashiyama11.a_larm.alarm.AlarmScreen
 fun HomeScreen(
     homeViewModel: HomeViewModel = hiltViewModel()
 ) {
+
+    LaunchedEffect(Unit) {
+        homeViewModel.onStart()
+    }
+
+
     val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
     Column(
         modifier = Modifier
@@ -40,6 +47,7 @@ fun HomeScreen(
             Spacer(Modifier.height(4.dp))
             //Switch(checked = uiState.enabled, onCheckedChange = onToggleEnabled)
         }
+        Text("モード: ${uiState.mode.name}")
         Spacer(Modifier.height(24.dp))
         Spacer(Modifier.height(24.dp))
         Text(text = "ルーチン")

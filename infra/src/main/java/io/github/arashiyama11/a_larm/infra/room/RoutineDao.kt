@@ -6,12 +6,13 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import io.github.arashiyama11.a_larm.domain.models.RoutineMode
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface RoutineDao {
 
     @Query("SELECT * FROM routine_cell WHERE mode = :mode")
-    suspend fun getAll(mode: RoutineMode): List<RoutineCellEntity>
+    fun getAll(mode: RoutineMode): Flow<List<RoutineCellEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(items: List<RoutineCellEntity>)
