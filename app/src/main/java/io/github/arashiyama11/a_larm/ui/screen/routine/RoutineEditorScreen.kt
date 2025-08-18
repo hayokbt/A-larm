@@ -599,7 +599,6 @@ private fun MinutePickerDialog(
                     value = localMinute / 59f,
                     onValueChange = { f -> localMinute = (f * 59).toInt().coerceIn(0, 59) },
                     valueRange = 0f..1f,
-                    steps = 58
                 )
             }
         }
