@@ -136,6 +136,7 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
     private var recordingJob: Job? = null
     private var messageProcessingJob: Job? = null
     private val isRecording = AtomicBoolean(false)
+    private val isSessionActive = AtomicBoolean(false)
     private val audioDataChannel = Channel<ByteArray>(Channel.UNLIMITED)
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
@@ -165,6 +166,7 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
 
             // WebSocket接続を確立（リトライ機能付き）
             webSocketSession = connectWithRetry(apiKey)
+            isSessionActive.set(true)
 
             // システム指示を構築
             val systemInstruction = buildSystemInstruction(persona, brief, history)
@@ -194,6 +196,10 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize session", e)
+            // エラー時はセッションを非アクティブにする
+            isSessionActive.set(false)
+            webSocketSession?.close()
+            webSocketSession = null
             _response.emit(VoiceChatResponse.Error("セッションの初期化に失敗しました: ${e.message}"))
             _chatState.value = LlmVoiceChatState.ERROR
         }
@@ -204,16 +210,19 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
             _chatState.value = LlmVoiceChatState.STOPPING
             Log.d(TAG, "Stopping session")
 
+            // セッションを非アクティブにマーク
+            isSessionActive.set(false)
+
             // 録音を停止
             stopAudioRecording()
+
+            // ジョブをキャンセル（WebSocket接続を閉じる前に）
+            recordingJob?.cancel()
+            messageProcessingJob?.cancel()
 
             // WebSocket接続を閉じる
             webSocketSession?.close()
             webSocketSession = null
-
-            // ジョブをキャンセル
-            recordingJob?.cancel()
-            messageProcessingJob?.cancel()
 
             _chatState.value = LlmVoiceChatState.IDLE
             Log.d(TAG, "Session stopped")
@@ -553,8 +562,23 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
         
         while (attempts < maxAttempts) {
             try {
-                webSocketSession?.send(Frame.Text(message))
+                // セッションがアクティブかチェック
+                if (!isSessionActive.get()) {
+                    Log.w(TAG, "Session is not active, cannot send message")
+                    return false
+                }
+                
+                val session = webSocketSession
+                if (session == null || session.isActive.not()) {
+                    Log.w(TAG, "WebSocket session is null or not active")
+                    return false
+                }
+                
+                session.send(Frame.Text(message))
                 return true
+            } catch (e: CancellationException) {
+                Log.d(TAG, "Message sending was cancelled")
+                return false
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to send message (attempt ${attempts + 1}/$maxAttempts): ${e.message}")
                 attempts++
@@ -572,6 +596,12 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
     @OptIn(ExperimentalEncodingApi::class)
     private suspend fun sendAudioData(audioData: ByteArray) {
         try {
+            // セッションがアクティブかチェック
+            if (!isSessionActive.get()) {
+                Log.d(TAG, "Session is not active, skipping audio data send")
+                return
+            }
+            
             // Gemini Live API用の最適化された音声データフォーマット
             val audioMessage = buildJsonObject {
                 put("realtime_input", buildJsonObject {
@@ -587,6 +617,8 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
             if (!success) {
                 Log.w(TAG, "Failed to send audio data after retries")
             }
+        } catch (e: CancellationException) {
+            Log.d(TAG, "Audio data sending was cancelled")
         } catch (e: Exception) {
             Log.e(TAG, "Error sending audio data", e)
         }
