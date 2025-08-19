@@ -17,8 +17,14 @@ interface RoutineDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(items: List<RoutineCellEntity>)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: RoutineCellEntity): Long
+
     @Query("DELETE FROM routine_cell WHERE mode = :mode")
     suspend fun deleteAllByMode(mode: RoutineMode)
+
+    @Query("DELETE FROM routine_cell WHERE id = :id")
+    suspend fun deleteById(id: Long)
 
     @Transaction
     suspend fun replaceAll(mode: RoutineMode, items: List<RoutineCellEntity>) {

@@ -63,6 +63,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import io.github.arashiyama11.a_larm.domain.models.AlarmId
 import io.github.arashiyama11.a_larm.domain.models.CellKey
 import io.github.arashiyama11.a_larm.domain.models.RoutineEntry
 import io.github.arashiyama11.a_larm.domain.models.RoutineGrid
@@ -215,7 +216,7 @@ private fun RoutineGrid(
                     ) {
                         repeat(days) { d ->
                             val key = CellKey(d, hour)
-                            val entry = grid[key] ?: RoutineEntry()
+                            val entry = grid[key] ?: RoutineEntry(id = AlarmId(0))
                             GridCellWeighted(
                                 entry = entry,
                                 onClick = { onCellClick(key) },

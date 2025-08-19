@@ -12,7 +12,7 @@ import io.github.arashiyama11.a_larm.domain.models.DayBrief
 import io.github.arashiyama11.a_larm.domain.models.PromptStyle
 import io.github.arashiyama11.a_larm.domain.models.Role
 import io.github.arashiyama11.a_larm.domain.models.RoutineMode
-import io.github.arashiyama11.a_larm.domain.usecase.ComputeNextAlarmUseCase
+import io.github.arashiyama11.a_larm.domain.usecase.AlarmRulesUseCase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
+import java.util.Locale
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
@@ -36,8 +37,8 @@ data class HomeUiState(
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val llmChatGateway: LlmChatGateway,
-    private val computeNextAlarmUseCase: ComputeNextAlarmUseCase,
-    private val routineRepository: RoutineRepository
+    private val routineRepository: RoutineRepository,
+    private val alarmRulesUseCase: AlarmRulesUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -53,11 +54,11 @@ class HomeViewModel @Inject constructor(
             while (isActive) {
                 val job = launch {
                     // 次のアラームを計算してUIに反映
-                    val nextAlarm = computeNextAlarmUseCase.execute(LocalDateTime.now())
-                    nextAlarm.collect {
 
-                        _uiState.update { currentState ->
-                            currentState.copy(nextAlarm = it?.toLocalTime()?.toString() ?: "--:--")
+                    val nextAlarm = alarmRulesUseCase.nextAlarmRule()
+                    if (nextAlarm != null) {
+                        _uiState.update {
+                            it.copy(nextAlarm = formatTime(nextAlarm.hour, nextAlarm.minute))
                         }
                     }
                 }
@@ -123,4 +124,8 @@ class HomeViewModel @Inject constructor(
                 }
             }.launchIn(viewModelScope)
     }
+}
+
+private fun formatTime(hour: Int, minute: Int): String {
+    return String.format(Locale.JAPAN, "%02d:%02d", hour, minute)
 }
