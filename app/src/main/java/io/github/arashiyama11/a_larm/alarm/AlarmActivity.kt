@@ -28,7 +28,7 @@ class AlarmActivity : ComponentActivity() {
 
         setContent {
             AlarmTheme {
-                AlarmScreen(finish = ::close)
+                AlarmRoute(finish = ::close)
             }
         }
     }

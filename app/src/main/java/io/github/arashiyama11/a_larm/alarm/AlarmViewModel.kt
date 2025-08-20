@@ -6,12 +6,15 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.arashiyama11.a_larm.domain.AudioOutputGateway
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatSessionGateway
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatState
+import io.github.arashiyama11.a_larm.domain.SimpleAlarmAudioGateway
 import io.github.arashiyama11.a_larm.domain.TtsGateway
 import io.github.arashiyama11.a_larm.domain.VoiceChatResponse
 import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.DayBrief
 import io.github.arashiyama11.a_larm.domain.models.PromptStyle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -20,7 +23,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
 
@@ -33,14 +35,20 @@ data class AlarmUiState(
     val sendingUserVoice: Boolean = false,
     val phase: AlarmPhase = AlarmPhase.RINGING,
     val chatState: LlmVoiceChatState = LlmVoiceChatState.IDLE,
-    val startAt: LocalDateTime? = null
+    val startAt: LocalDateTime? = null,
 )
+
+sealed interface AlarmUiAction {
+    data object Start : AlarmUiAction
+    data object Stop : AlarmUiAction
+}
 
 @HiltViewModel
 class AlarmViewModel @Inject constructor(
     private val ttsGateway: TtsGateway,
     private val llmVoiceChatSessionGateway: LlmVoiceChatSessionGateway,
-    private val audioOutputGateway: AudioOutputGateway
+    private val audioOutputGateway: AudioOutputGateway,
+    private val simpleAlarmAudioGateway: SimpleAlarmAudioGateway
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AlarmUiState())
     val uiState = combine(_uiState, llmVoiceChatSessionGateway.chatState) { uiState, chatState ->
@@ -58,14 +66,32 @@ class AlarmViewModel @Inject constructor(
         date = LocalDateTime.now()
     )
 
+    private var simpleAlarmJob: Job? = null
+
     fun onStart() {
         if (started) return
         started = true
         viewModelScope.launch(Dispatchers.IO) {
             llmVoiceChatSessionGateway.initialize(persona, brief, emptyList())
         }
+        simpleAlarmJob = viewModelScope.launch(Dispatchers.IO) {
+            simpleAlarmAudioGateway.playAlarmSound()
+        }
+
+        viewModelScope.launch {
+            delay(5000)
+            simpleAlarmAudioGateway.stopAlarmSound()
+
+        }
         llmVoiceChatSessionGateway.response.onEach {
+            println("Received response: $it")
             if (uiState.value.phase == AlarmPhase.RINGING) {
+                try {
+                    simpleAlarmAudioGateway.stopAlarmSound()
+                } finally {
+                    simpleAlarmJob?.cancel()
+                    simpleAlarmJob = null
+                }
                 _uiState.update {
                     it.copy(
                         phase = AlarmPhase.TALKING,
@@ -94,5 +120,27 @@ class AlarmViewModel @Inject constructor(
                 }
             }
         }.launchIn(viewModelScope)
+    }
+
+    fun reduce(action: AlarmUiAction) {
+        when (action) {
+            is AlarmUiAction.Start -> {
+                if (!started) {
+                    onStart()
+                }
+            }
+
+            is AlarmUiAction.Stop -> {
+                viewModelScope.launch(Dispatchers.IO) {
+                    llmVoiceChatSessionGateway.stop()
+                    _uiState.update {
+                        it.copy(
+                            phase = AlarmPhase.SUCCESS,
+                            sendingUserVoice = false
+                        )
+                    }
+                }
+            }
+        }
     }
 }
