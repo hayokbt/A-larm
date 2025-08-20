@@ -8,10 +8,12 @@ import java.time.LocalTime
 data class AlarmRule(
     val id: AlarmId,
     val label: String?,
-    val time: LocalTime,
-    val daysOfWeek: Set<DayOfWeek>,
+    val mode: RoutineMode,
+    val type: RoutineType,
+    val dayIndex: Int, // 0=Mon, 6=Sun
+    val hour: Int,
+    val minute: Int,
     val enabled: Boolean = true,
-    val wakeCriteria: WakeCriteria = WakeCriteria.default()
 )
 
 /** 起床判定のための閾値/方針 */
@@ -26,6 +28,7 @@ data class WakeCriteria(
         fun default() = WakeCriteria()
     }
 }
+
 enum class WakeStrategy { Lenient, Balanced, Strict }
 
 /** 無応答・遅延時のフォールバック/音量エスカレーション */
@@ -34,8 +37,12 @@ data class NoResponsePolicy(
     val volumeRamp: VolumeRampPolicy = VolumeRampPolicy(),
     val llmTimeoutMs: Long = 3500,
     val ttsTimeoutMs: Long = 2500,
-    val fallbackPhrases: List<String> = listOf("おはよう。起きてる？", "返事がなければアラーム音に切り替えるね")
+    val fallbackPhrases: List<String> = listOf(
+        "おはよう。起きてる？",
+        "返事がなければアラーム音に切り替えるね"
+    )
 )
+
 data class VolumeRampPolicy(
     val startLevel: Int = 3,       // 0..max（infraが実際の範囲に合わせて丸める）
     val maxLevel: Int = 10,
@@ -68,6 +75,7 @@ sealed interface AlarmState {
         val since: Instant,
         val conversationSeconds: Int = 0
     ) : AlarmState
+
     data object AwakeConfirmed : AlarmState
     data object Ended : AlarmState
 }

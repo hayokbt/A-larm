@@ -61,7 +61,7 @@ class SettingsViewModel @Inject constructor(
         val after10Sec = LocalDateTime.now().plus(10, ChronoUnit.SECONDS)
 
         viewModelScope.launch {
-            alarmScheduler.scheduleExact(after10Sec, AlarmId("Test Alarm"))
+            alarmScheduler.scheduleExact(after10Sec, AlarmId(42))
         }
     }
 
