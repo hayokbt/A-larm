@@ -33,7 +33,8 @@ data class AlarmUiState(
     val sendingUserVoice: Boolean = false,
     val phase: AlarmPhase = AlarmPhase.RINGING,
     val chatState: LlmVoiceChatState = LlmVoiceChatState.IDLE,
-    val startAt: LocalDateTime? = null
+    val startAt: LocalDateTime? = null,
+    val assistantTalk: List<String> = emptyList()
 )
 
 @HiltViewModel
@@ -64,7 +65,7 @@ class AlarmViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             llmVoiceChatSessionGateway.initialize(persona, brief, emptyList())
         }
-        llmVoiceChatSessionGateway.response.onEach {
+        llmVoiceChatSessionGateway.response.onEach { res ->
             if (uiState.value.phase == AlarmPhase.RINGING) {
                 _uiState.update {
                     it.copy(
@@ -75,13 +76,18 @@ class AlarmViewModel @Inject constructor(
                 }
             }
 
-            when (it) {
+            when (res) {
                 is VoiceChatResponse.Text -> {
-                    ttsGateway.speak(it.text)
+                    ttsGateway.speak(res.text)
+                    _uiState.update {
+                        it.copy(
+                            assistantTalk = it.assistantTalk + res.text,
+                        )
+                    }
                 }
 
                 is VoiceChatResponse.Voice -> {
-                    audioOutputGateway.play(it.data)
+                    audioOutputGateway.play(res.data)
                 }
 
                 is VoiceChatResponse.Error -> {

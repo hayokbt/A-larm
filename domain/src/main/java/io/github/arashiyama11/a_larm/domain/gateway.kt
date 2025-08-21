@@ -37,12 +37,14 @@ data class AlarmTrigger(val at: Instant, val alarmId: AlarmId?)
 
 /** 音量制御（可能な範囲のみ） */
 interface AudioOutputGateway {
+
     suspend fun setVolume(level: Int)
-    suspend fun ramp(policy: VolumeRampPolicy)
 
     suspend fun play(data: ByteArray)
 
-    fun supportedRange(): IntRange // 例: 0..15
+    fun supportedRange(): IntRange
+
+    suspend fun stop()
 
 }
 
@@ -119,9 +121,7 @@ sealed interface VoiceChatResponse {
 enum class LlmVoiceChatState {
     IDLE,
     INITIALIZING,
-    USER_SPEAKING,
-    ASSISTANT_THINKING,
-    ASSISTANT_SPEAKING,
+    ACTIVE,
     STOPPING,
     ERROR
 }

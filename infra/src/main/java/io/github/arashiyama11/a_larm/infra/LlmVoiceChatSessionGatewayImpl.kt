@@ -1,10 +1,12 @@
 package io.github.arashiyama11.a_larm.infra
 
+import android.Manifest
 import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
+import androidx.annotation.RequiresPermission
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.arashiyama11.a_larm.domain.LlmApiKeyRepository
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatSessionGateway
@@ -14,6 +16,7 @@ import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.DayBrief
 import io.github.arashiyama11.a_larm.domain.models.Role
+import io.github.arashiyama11.a_larm.infra.LlmVoiceChatSessionGatewayImpl.Companion.TAG
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -25,7 +28,6 @@ import io.ktor.utils.io.InternalAPI
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,9 +41,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.buildJsonArray
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
+import javax.inject.Singleton
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -58,7 +60,7 @@ data class GeminiLiveSetupRequest(
 
 @Serializable
 data class GeminiLiveSetup(
-    val model: String = "models/gemini-2.0-flash-exp",
+    val model: String = "models/gemini-2.5-flash-preview-native-audio-dialog",//"models/gemini-2.0-flash-exp",
     val generationConfig: GeminiGenerationConfig = GeminiGenerationConfig(),
     val systemInstruction: GeminiSystemInstruction? = null,
     //val tools: List<JsonElement> = emptyList()
@@ -66,7 +68,10 @@ data class GeminiLiveSetup(
 
 @Serializable
 data class GeminiGenerationConfig(
-    val response_modalities: List<String> = listOf("TEXT"),
+    val response_modalities: List<String> = listOf(
+        "AUDIO",
+        "TEXT"
+    ), //listOf("TEXT"), 実際にはlistにできなそう
     val speech_config: GeminiSpeechConfig = GeminiSpeechConfig()
 )
 
@@ -95,8 +100,9 @@ data class GeminiPart(
     val text: String
 )
 
+
+@Singleton
 class LlmVoiceChatSessionGatewayImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val llmApiKeyRepository: LlmApiKeyRepository
 ) : LlmVoiceChatSessionGateway {
 
@@ -122,6 +128,7 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
             json(Json {
                 ignoreUnknownKeys = true
                 isLenient = true
+                encodeDefaults = true
             })
         }
         install(Logging) {
@@ -137,12 +144,17 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
+        encodeDefaults = true
     }
 
     init {
         CoroutineScope(Dispatchers.Default).launch {
             while (isActive) {
                 Log.d(TAG, "Session active: ${isSessionActive.get()} ${webSocketSession?.isActive}")
+                if (webSocketSession?.isActive == false || webSocketSession == null) {
+                    Log.d(TAG, "WebSocket session is not active, attempting to reconnect")
+                    _chatState.value = LlmVoiceChatState.ERROR
+                }
                 delay(1000)
             }
         }
@@ -157,11 +169,8 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
     private val audioDataChannel = Channel<ByteArray>(Channel.UNLIMITED)
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // リトライ関連
-    private var retryCount = 0
-    private val maxRetryCount = 1
-    private val retryDelayMs = 1000L
 
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     @OptIn(ExperimentalEncodingApi::class)
     override suspend fun initialize(
         persona: AssistantPersona,
@@ -182,35 +191,30 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
             }
 
             // WebSocket接続を確立（リトライ機能付き）
-            webSocketSession = connectWithRetry(apiKey)
+            webSocketSession = connect(apiKey)
             isSessionActive.set(true)
 
-            // システム指示を構築
-            val systemInstruction = buildSystemInstruction(persona, brief, history)
-
             // セットアップメッセージを送信
-            val setupMessage = GeminiLiveSetupRequest(
-                setup = GeminiLiveSetup(
-                    systemInstruction = systemInstruction
-                )
+            val setupMessage = buildSetupRequest(
+                responseAudio = false,
+                persona = persona,
+                brief = brief,
+                history = history
             )
 
-            val setupJson = json.encodeToString(setupMessage)
-//            val setupSuccess = sendMessageWithRetry(setupJson)
-//            if (!setupSuccess) {
-//                throw Exception("Failed to send setup message after retries")
-//            }
+            val setupSuccess = sendMessage(json.encodeToString(setupMessage))
+
+            if (!setupSuccess) {
+                throw Exception("Failed to send setup message after retries")
+            }
+
             Log.d(TAG, "Setup message sent successfully")
 
-            // メッセージ処理を開始
             startMessageProcessing()
-
-            // 音声録音を開始
             startAudioRecording()
 
-            _chatState.value = LlmVoiceChatState.USER_SPEAKING
+            _chatState.value = LlmVoiceChatState.ACTIVE
             Log.d(TAG, "Gemini Live API session initialized successfully")
-
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize session", e)
             // エラー時はセッションを非アクティブにする
@@ -250,88 +254,7 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
         }
     }
 
-    private fun buildSystemInstruction(
-        persona: AssistantPersona,
-        brief: DayBrief,
-        history: List<ConversationTurn>
-    ): GeminiSystemInstruction {
-        val promptBuilder = StringBuilder()
-
-        // ペルソナ情報
-        promptBuilder.append("あなたは${persona.displayName}として振る舞ってください。")
-        persona.backstory?.let {
-            promptBuilder.append("\n背景: $it")
-        }
-
-        // スタイル情報
-        val style = persona.style
-        promptBuilder.append(
-            "\n話し方: ${getToneDescription(style.tone)}、エネルギー: ${
-                getEnergyDescription(
-                    style.energy
-                )
-            }"
-        )
-
-        if (style.questionFirst) {
-            promptBuilder.append("\nユーザーを起こすために、最初は短い質問から始めてください。")
-        }
-
-        // 日付・予定情報
-        brief.date?.let {
-            promptBuilder.append("\n今日は${it.toLocalDate()}です。")
-        }
-
-        if (brief.calendar.isNotEmpty()) {
-            promptBuilder.append("\n今日の予定:")
-            brief.calendar.forEach { event ->
-                promptBuilder.append("\n- ${event.start.toLocalTime()}: ${event.title}")
-            }
-        }
-
-        // 天気情報
-        brief.weather?.let { weather ->
-            promptBuilder.append("\n天気: ${weather.summary}")
-            weather.tempC?.let { temp ->
-                promptBuilder.append("、気温: ${temp}度")
-            }
-        }
-
-        // 会話履歴
-        if (history.isNotEmpty()) {
-            promptBuilder.append("\n\n過去の会話:")
-            history.takeLast(5).forEach { turn ->
-                val roleText = when (turn.role) {
-                    Role.User -> "ユーザー"
-                    Role.Assistant -> "アシスタント"
-                    Role.System -> "システム"
-                }
-                promptBuilder.append("\n$roleText: ${turn.text}")
-            }
-        }
-
-        promptBuilder.append("\n\nユーザーを優しく起こしてください。短い音声で応答してください。")
-
-        return GeminiSystemInstruction(
-            parts = listOf(GeminiPart(text = promptBuilder.toString()))
-        )
-    }
-
-    private fun getToneDescription(tone: io.github.arashiyama11.a_larm.domain.models.Tone): String =
-        when (tone) {
-            io.github.arashiyama11.a_larm.domain.models.Tone.Friendly -> "親しみやすい"
-            io.github.arashiyama11.a_larm.domain.models.Tone.Strict -> "厳格"
-            io.github.arashiyama11.a_larm.domain.models.Tone.Cheerful -> "明るい"
-            io.github.arashiyama11.a_larm.domain.models.Tone.Deadpan -> "無表情"
-        }
-
-    private fun getEnergyDescription(energy: io.github.arashiyama11.a_larm.domain.models.Energy): String =
-        when (energy) {
-            io.github.arashiyama11.a_larm.domain.models.Energy.Low -> "落ち着いた"
-            io.github.arashiyama11.a_larm.domain.models.Energy.Medium -> "普通"
-            io.github.arashiyama11.a_larm.domain.models.Energy.High -> "活発"
-        }
-
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     @OptIn(ExperimentalEncodingApi::class)
     private fun startAudioRecording() {
         try {
@@ -364,11 +287,8 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
                 while (isRecording.get() && isActive) {
                     val bytesRead = audioRecord?.read(buffer, 0, buffer.size) ?: 0
                     if (bytesRead > 0) {
-                        // 音声データをBase64エンコードしてWebSocketに送信
                         val audioData = buffer.copyOf(bytesRead)
                         audioDataChannel.trySend(audioData)
-
-                        // Gemini Live APIに音声データを送信（最適化されたフォーマット）
                         sendAudioData(audioData)
                     }
 
@@ -402,33 +322,26 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
         messageProcessingJob = coroutineScope.launch {
             try {
                 for (frame in webSocketSession!!.incoming) {
-                    Log.d(TAG, "Received frame: $frame")
-                    when (frame) {
-                        is Frame.Text -> {
-                            val messageText = frame.readText()
-                            Log.d(TAG, "Received message: $messageText")
-
-                            try {
-                                val jsonElement = json.parseToJsonElement(messageText)
-                                processGeminiMessage(jsonElement.jsonObject)
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error parsing message: $messageText", e)
-                            }
-                        }
-
-                        is Frame.Binary -> {
-                            val binaryData = frame.readBytes()
-                            Log.d(TAG, "Received binary data: ${binaryData.decodeToString()}")
-                        }
-
+                    val messageText = when (frame) {
+                        is Frame.Text -> frame.readText()
+                        is Frame.Binary -> frame.readBytes().decodeToString()
                         is Frame.Close -> {
                             Log.d(TAG, "WebSocket connection closed")
+                            isSessionActive.set(false)
+                            _chatState.value = LlmVoiceChatState.IDLE
                             break
                         }
 
                         else -> {
-                            // その他のフレームタイプは無視
+                            return@launch
                         }
+                    }
+                    Log.d(TAG, "Processing frame: $messageText".take(100))
+                    try {
+                        val jsonElement = json.parseToJsonElement(messageText)
+                        processGeminiMessage(jsonElement.jsonObject)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error parsing message: $messageText", e)
                     }
                 }
             } catch (e: Exception) {
@@ -441,6 +354,8 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
         }
     }
 
+    private val processingResponseText = StringBuilder()
+
     @OptIn(ExperimentalEncodingApi::class)
     private suspend fun processGeminiMessage(message: JsonObject) {
         try {
@@ -449,6 +364,7 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
             // セットアップ完了の確認
             if (message.containsKey("setupComplete")) {
                 Log.d(TAG, "Setup completed")
+                _chatState.value = LlmVoiceChatState.ACTIVE
                 return
             }
 
@@ -457,7 +373,7 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
             if (serverContent != null) {
                 val modelTurn = serverContent["modelTurn"]?.jsonObject
                 if (modelTurn != null) {
-                    _chatState.value = LlmVoiceChatState.ASSISTANT_SPEAKING
+                    _chatState.value = LlmVoiceChatState.ACTIVE
 
                     val parts = modelTurn["parts"]
                     if (parts != null) {
@@ -466,18 +382,37 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
                     }
                 }
 
+                // ユーザーが喋って中断された
+                val interrupted = serverContent["interrupted"]
+                if (interrupted != null) {
+                    if (processingResponseText.isNotEmpty()) {
+                        processingResponseText.clear()
+                    } else if (processingVoiceResponseText.isNotEmpty()) {
+                        processingVoiceResponseText.clear()
+                    }
+                }
                 // ターン完了の確認
                 val turnComplete = serverContent["turnComplete"]
                 if (turnComplete != null) {
+                    if (processingResponseText.isNotEmpty()) {
+                        _response.emit(VoiceChatResponse.Text(processingResponseText.toString()))
+                        processingResponseText.clear()
+                    } else if (processingVoiceResponseText.isNotEmpty()) {
+                        //base64してから
+                        _response.emit(
+                            VoiceChatResponse.Voice(Base64.decode(processingVoiceResponseText.toString()))
+                        )
+                        processingVoiceResponseText.clear()
+                    }
                     Log.d(TAG, "Turn completed")
-                    _chatState.value = LlmVoiceChatState.USER_SPEAKING
+                    //_chatState.value = LlmVoiceChatState.USER_SPEAKING
                 }
             }
 
             // 直接のターン完了メッセージ
             if (message.containsKey("turnComplete")) {
                 Log.d(TAG, "Turn completed (direct)")
-                _chatState.value = LlmVoiceChatState.USER_SPEAKING
+                //_chatState.value = LlmVoiceChatState.
             }
 
         } catch (e: Exception) {
@@ -486,6 +421,8 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
         }
     }
 
+    private val processingVoiceResponseText = StringBuilder()
+
     @OptIn(ExperimentalEncodingApi::class)
     private suspend fun processModelTurnParts(parts: JsonElement) {
         try {
@@ -493,8 +430,9 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
                 parts.toString().contains("inlineData") -> {
                     // 音声データの処理
                     val audioData = extractAudioDataFromParts(parts)
-                    if (audioData.isNotEmpty()) {
-                        _response.emit(VoiceChatResponse.Voice(audioData))
+                    if (!audioData.isNullOrBlank()) {
+                        processingVoiceResponseText.append(audioData)
+                        // _response.emit(VoiceChatResponse.Voice(audioData))
                     }
                 }
 
@@ -502,7 +440,7 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
                     // テキストデータの処理
                     val textContent = extractTextFromParts(parts)
                     if (textContent.isNotEmpty()) {
-                        _response.emit(VoiceChatResponse.Text(textContent))
+                        processingResponseText.append(textContent)
                     }
                 }
 
@@ -516,162 +454,51 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
     }
 
     @OptIn(ExperimentalEncodingApi::class)
-    private fun extractAudioDataFromParts(parts: JsonElement): ByteArray {
+    private fun extractAudioDataFromParts(parts: JsonElement): String? {
         return try {
-            // Gemini Live APIの音声データ構造に基づいて実装
-            // 実際のAPIレスポンス構造に応じて調整が必要
-            val jsonObject = parts.jsonObject
+            val jsonObject = parts.jsonArray[0].jsonObject
             val inlineData = jsonObject["inlineData"]?.jsonObject
             val data = inlineData?.get("data")?.jsonPrimitive?.content
-
-            if (data != null) {
-                Base64.decode(data)
-            } else {
-                ByteArray(0)
-            }
+            data
         } catch (e: Exception) {
             Log.e(TAG, "Error extracting audio data from parts", e)
-            ByteArray(0)
+            null
         }
     }
 
-    private fun extractTextFromParts(parts: JsonElement): String {
-        return try {
-            // Gemini Live APIのテキストレスポンス構造に基づいて実装
-            val jsonArray = parts.jsonArray
-            val textParts = mutableListOf<String>()
-
-            for (part in jsonArray) {
-                val partObject = part.jsonObject
-                val text = partObject["text"]?.jsonPrimitive?.content
-                if (text != null) {
-                    textParts.add(text)
-                }
-            }
-
-            textParts.joinToString("")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error extracting text from parts", e)
-            // フォールバック：単純な文字列変換
-            try {
-                parts.toString().let { raw ->
-                    // JSONから簡単にテキストを抽出する試み
-                    if (raw.contains("\"text\":")) {
-                        val regex = "\"text\"\\s*:\\s*\"([^\"]+)\"".toRegex()
-                        regex.findAll(raw).map { it.groupValues[1] }.joinToString("")
-                    } else {
-                        ""
-                    }
-                }
-            } catch (fallbackError: Exception) {
-                Log.e(TAG, "Fallback text extraction failed", fallbackError)
-                ""
-            }
-        }
-    }
 
     @OptIn(InternalAPI::class)
-    private suspend fun connectWithRetry(apiKey: String): DefaultClientWebSocketSession {
-        var currentRetry = 0
-        var lastException: Exception? = null
-
+    private suspend fun connect(apiKey: String): DefaultClientWebSocketSession {
         val session = httpClient.webSocketSession(GEMINI_WS_URL) {
             parameter("key", apiKey)
             parameter("alt", "ws")
         }
-
-
-        val receiverJob = CoroutineScope(Dispatchers.IO).launch {
-            try {
-//                session.incoming.consumeAsFlow().first { frame ->
-//                    val text: String = when (frame) {
-//                        is Frame.Text -> frame.readText()
-//                        is Frame.Binary -> frame.readBytes().toString(Charsets.UTF_8)
-//                        else -> return@first false
-//                    }
-//                    text.contains("setupComplete").also {
-//                        if (it) {
-//                            Log.d(TAG, "Setup complete message received: $text")
-//                        } else {
-//                            Log.d(TAG, "Received message: $text")
-//                        }
-//                    }
-//                }
-            } catch (e: ClosedReceiveChannelException) {
-                // 正常クローズで来ることがある → ログだけ
-                Log.d(TAG, "incoming closed: ${session.closeReason.await()}")
-            } catch (e: CancellationException) {
-                // 親がキャンセルされた／明示的に閉じられた場合
-                Log.w(TAG, "receiver cancelled: ${e.message}")
-            } catch (t: Throwable) {
-                Log.e(TAG, "receiver error", t)
-            }
-        }
-
-        try {
-            // 最初の setup を送る（非同期で安全に送れる）
-            session.send(
-                Frame.Text("""{"setup": {"model": "models/gemini-2.0-flash-exp","generationConfig": {"response_modalities": ["TEXT"]}}}""")
-            )
-
-            // ここで他の send や処理を行う（必要なら別の coroutine で送信し続ける）
-            // 例: 何か条件で待つ、または別 job として send を起動
-
-            // 受信が終わるまで待つ (受信ジョブが完了するのを待つ)
-            //receiverJob.join()
-        } finally {
-            // 明示的に閉じる。close は何度呼んでもよい。
-//            try {
-//                session.close(CloseReason(CloseReason.Codes.NORMAL, "bye"))
-//            } catch (t: Throwable) {
-//                Log.w(TAG, "close failed", t)
-//            }
-
-        }
-        webSocketSession = session
         return session
-            ?: throw IllegalStateException("WebSocket session is null after connection attempt")
-
     }
 
-    private suspend fun sendMessageWithRetry(message: String, maxAttempts: Int = 3): Boolean {
-        //Log.d(TAG, "Sending message with retry: $message")
-        //println(message)
-        var attempts = 0
-
-        while (attempts < maxAttempts) {
-            try {
-                // セッションがアクティブかチェック
-                if (!isSessionActive.get()) {
-                    Log.w(TAG, "Session is not active, cannot send message")
-                    return false
-                }
-
-                val session = webSocketSession
-                if (session == null || session.isActive.not()) {
-                    Log.w(TAG, "WebSocket session is null or not active: $session")
-                    return false
-                }
-
-                session.send(Frame.Text(message))
-                return true
-            } catch (e: CancellationException) {
-                Log.d(TAG, "Message sending was cancelled")
+    private suspend fun sendMessage(message: String): Boolean {
+        try {
+            // セッションがアクティブかチェック
+            if (!isSessionActive.get()) {
+                Log.w(TAG, "Session is not active, cannot send message")
                 return false
-            } catch (e: Exception) {
-                Log.w(
-                    TAG,
-                    "Failed to send message (attempt ${attempts + 1}/$maxAttempts): ${e.message}"
-                )
-                attempts++
-
-                if (attempts < maxAttempts) {
-                    delay(500L * attempts) // 500ms, 1s, 1.5s...
-                }
             }
+
+            val session = webSocketSession
+            if (session == null || session.isActive.not()) {
+                Log.w(TAG, "WebSocket session is null or not active: $session")
+                return false
+            }
+
+            session.send(Frame.Text(message))
+            return true
+        } catch (e: CancellationException) {
+            Log.d(TAG, "Message sending was cancelled")
+            return false
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending message: ${e.message}", e)
         }
 
-        Log.e(TAG, "Failed to send message after $maxAttempts attempts")
         return false
     }
 
@@ -681,21 +508,14 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
             // セッションがアクティブかチェック
             if (!isSessionActive.get()) {
                 Log.d(TAG, "Session is not active, skipping audio data send")
+                _chatState.value = LlmVoiceChatState.ERROR
                 return
             }
 
             // Gemini Live API用の最適化された音声データフォーマット
-            val audioMessage = buildJsonObject {
-                put("realtimeInput", buildJsonObject {
-                    put("audio", buildJsonObject {
-                        put("data", Base64.encode(audioData))
-                        put("mimeType", "audio/pcm;rate=16000")
-                    })
-                })
-            }
+            val audioMessage = buildAudioMessage(audioData)
 
-            // リトライ機能付きで送信
-            val success = sendMessageWithRetry(audioMessage.toString())
+            val success = sendMessage(audioMessage)
             if (!success) {
                 Log.w(TAG, "Failed to send audio data after retries")
             }
@@ -703,6 +523,176 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
             Log.d(TAG, "Audio data sending was cancelled")
         } catch (e: Exception) {
             Log.e(TAG, "Error sending audio data", e)
+        }
+    }
+}
+
+
+private fun buildSetupRequest(
+    responseAudio: Boolean = false,
+    persona: AssistantPersona,
+    brief: DayBrief,
+    history: List<ConversationTurn>
+): GeminiLiveSetupRequest {
+    if (responseAudio) {
+        GeminiLiveSetupRequest(
+            setup = GeminiLiveSetup(
+                model = "models/gemini-2.5-flash-preview-native-audio-dialog",
+                generationConfig = GeminiGenerationConfig(
+                    response_modalities = listOf("AUDIO"),
+                    speech_config = GeminiSpeechConfig(
+                        voice_config = GeminiVoiceConfig(
+                            prebuilt_voice_config = GeminiPrebuiltVoiceConfig(
+                                voice_name = "Aoede"
+                            )
+                        )
+                    )
+                ),
+                systemInstruction = buildSystemInstruction(
+                    persona, brief, history
+                )
+            )
+        )
+    }
+    return GeminiLiveSetupRequest(
+        setup = GeminiLiveSetup(
+            model = "models/gemini-2.0-flash-exp",
+            systemInstruction = buildSystemInstruction(persona, brief, history),
+            generationConfig = GeminiGenerationConfig(
+                response_modalities = listOf("TEXT"),
+            )
+        )
+    )
+}
+
+@OptIn(ExperimentalEncodingApi::class)
+private fun buildAudioMessage(audioData: ByteArray): String {
+    return buildJsonObject {
+        put("realtimeInput", buildJsonObject {
+            put("audio", buildJsonObject {
+                put("data", Base64.encode(audioData))
+                put("mimeType", "audio/pcm;rate=16000")
+            })
+        })
+    }.toString()
+}
+
+
+private fun buildSystemInstruction(
+    persona: AssistantPersona,
+    brief: DayBrief,
+    history: List<ConversationTurn>
+): GeminiSystemInstruction {
+    val promptBuilder = StringBuilder()
+
+    // ペルソナ情報
+    promptBuilder.append("あなたは${persona.displayName}として振る舞ってください。")
+    persona.backstory?.let {
+        promptBuilder.append("\n背景: $it")
+    }
+
+    // スタイル情報
+    val style = persona.style
+    promptBuilder.append(
+        "\n話し方: ${getToneDescription(style.tone)}、エネルギー: ${
+            getEnergyDescription(
+                style.energy
+            )
+        }"
+    )
+
+    if (style.questionFirst) {
+        promptBuilder.append("\nユーザーを起こすために、最初は短い質問から始めてください。")
+    }
+
+    // 日付・予定情報
+    brief.date?.let {
+        promptBuilder.append("\n今日は${it.toLocalDate()}です。")
+    }
+
+    if (brief.calendar.isNotEmpty()) {
+        promptBuilder.append("\n今日の予定:")
+        brief.calendar.forEach { event ->
+            promptBuilder.append("\n- ${event.start.toLocalTime()}: ${event.title}")
+        }
+    }
+
+    // 天気情報
+    brief.weather?.let { weather ->
+        promptBuilder.append("\n天気: ${weather.summary}")
+        weather.tempC?.let { temp ->
+            promptBuilder.append("、気温: ${temp}度")
+        }
+    }
+
+    // 会話履歴
+    if (history.isNotEmpty()) {
+        promptBuilder.append("\n\n過去の会話:")
+        history.takeLast(5).forEach { turn ->
+            val roleText = when (turn.role) {
+                Role.User -> "ユーザー"
+                Role.Assistant -> "アシスタント"
+                Role.System -> "システム"
+            }
+            promptBuilder.append("\n$roleText: ${turn.text}")
+        }
+    }
+
+    promptBuilder.append("\n\nユーザーを優しく起こしてください。短い音声で応答してください。")
+
+    return GeminiSystemInstruction(
+        parts = listOf(GeminiPart(text = promptBuilder.toString()))
+    )
+}
+
+
+private fun getToneDescription(tone: io.github.arashiyama11.a_larm.domain.models.Tone): String =
+    when (tone) {
+        io.github.arashiyama11.a_larm.domain.models.Tone.Friendly -> "親しみやすい"
+        io.github.arashiyama11.a_larm.domain.models.Tone.Strict -> "厳格"
+        io.github.arashiyama11.a_larm.domain.models.Tone.Cheerful -> "明るい"
+        io.github.arashiyama11.a_larm.domain.models.Tone.Deadpan -> "無表情"
+    }
+
+private fun getEnergyDescription(energy: io.github.arashiyama11.a_larm.domain.models.Energy): String =
+    when (energy) {
+        io.github.arashiyama11.a_larm.domain.models.Energy.Low -> "落ち着いた"
+        io.github.arashiyama11.a_larm.domain.models.Energy.Medium -> "普通"
+        io.github.arashiyama11.a_larm.domain.models.Energy.High -> "活発"
+    }
+
+
+private fun extractTextFromParts(parts: JsonElement): String {
+    return try {
+        // Gemini Live APIのテキストレスポンス構造に基づいて実装
+        val jsonArray = parts.jsonArray
+        val textParts = mutableListOf<String>()
+
+        for (part in jsonArray) {
+            val partObject = part.jsonObject
+            val text = partObject["text"]?.jsonPrimitive?.content
+            if (text != null) {
+                textParts.add(text)
+            }
+        }
+
+        textParts.joinToString("")
+    } catch (e: Exception) {
+        Log.e("Llm", "Error extracting text from parts", e)
+        // フォールバック：単純な文字列変換
+        try {
+            parts.toString().let { raw ->
+                // JSONから簡単にテキストを抽出する試み
+                if (raw.contains("\"text\":")) {
+                    val regex = "\"text\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+                    regex.findAll(raw).map { it.groupValues[1] }.joinToString("")
+                } else {
+                    ""
+                }
+            }
+        } catch (fallbackError: Exception) {
+            Log.e("Llm", "Fallback text extraction failed", fallbackError)
+            ""
         }
     }
 }

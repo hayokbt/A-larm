@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -60,8 +62,7 @@ fun AlarmScreen(
 
             // Progress indicator during talking/initializing
             val showProgress = when (uiState.chatState) {
-                LlmVoiceChatState.INITIALIZING,
-                LlmVoiceChatState.ASSISTANT_THINKING -> true
+                LlmVoiceChatState.INITIALIZING -> true
 
                 else -> false
             }
@@ -70,10 +71,17 @@ fun AlarmScreen(
                 Spacer(Modifier.height(8.dp))
             }
 
-            if (uiState.chatState == LlmVoiceChatState.ASSISTANT_SPEAKING) {
-                Text("なんか喋ってる風の表示")
-                Spacer(Modifier.height(8.dp))
-            }
+//            if (uiState.chatState == LlmVoiceChatState.ASSISTANT_SPEAKING) {
+//                Text("なんか喋ってる風の表示")
+//                Spacer(Modifier.height(8.dp))
+//            }
+
+            Text(
+                uiState.assistantTalk.joinToString("\n"),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            )
 
             uiState.startAt?.let { startAt ->
                 val fmt = DateTimeFormatter.ofPattern("HH:mm:ss")
@@ -104,11 +112,9 @@ private fun phaseLabel(phase: AlarmPhase): String = when (phase) {
 private fun chatLabel(state: LlmVoiceChatState): String = when (state) {
     LlmVoiceChatState.IDLE -> "待機中"
     LlmVoiceChatState.INITIALIZING -> "初期化中..."
-    LlmVoiceChatState.USER_SPEAKING -> "あなたの発話を待機"
-    LlmVoiceChatState.ASSISTANT_THINKING -> "アシスタント思考中..."
-    LlmVoiceChatState.ASSISTANT_SPEAKING -> "アシスタント応答中..."
     LlmVoiceChatState.STOPPING -> "停止処理中"
     LlmVoiceChatState.ERROR -> "セッションエラー"
+    LlmVoiceChatState.ACTIVE -> "会話中"
 }
 
 @Preview

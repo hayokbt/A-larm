@@ -61,7 +61,7 @@ abstract class ApplicationBindsModule {
     @Singleton
     @Binds
     abstract fun bindAudioOutputGateway(
-        impl: FakeAudioOutputGateway
+        impl: AudioOutputGatewayImpl
     ): AudioOutputGateway
 
     @Singleton
