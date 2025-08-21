@@ -20,7 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.arashiyama11.a_larm.alarm.AlarmScreen
+import io.github.arashiyama11.a_larm.alarm.AlarmRoute
 
 @Composable
 fun HomeScreen(
@@ -67,7 +67,7 @@ fun HomeScreen(
                 )
                 .padding(8.dp)
         ) {
-            AlarmScreen { }
+            AlarmRoute { }
         }
     }
 }

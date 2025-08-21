@@ -25,6 +25,14 @@ interface DayBriefGateway {
     suspend fun buildBrief(forDate: LocalDate): DayBrief
 }
 
+interface SimpleAlarmAudioGateway {
+    /** アラーム音を鳴らす */
+    suspend fun playAlarmSound()
+
+    /** アラーム音を停止する */
+    suspend fun stopAlarmSound()
+}
+
 /** OSアラームスケジューラの抽象化 */
 interface AlarmSchedulerGateway {
     suspend fun scheduleExact(at: LocalDateTime, payload: AlarmId?)
