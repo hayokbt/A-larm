@@ -1,21 +1,44 @@
 package io.github.arashiyama11.a_larm.domain.models
 
-import java.time.DayOfWeek
 import java.time.LocalDateTime
-import java.time.LocalTime
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
+enum class Gender {
+    MALE, FEMALE, OTHER
+}
 
-data class DailyHabit(
-    val wakeTime: LocalTime,
-    val bedTime: LocalTime? = null,
+data class UserProfile(
+    val name: String,
+    val gender: Gender
 )
 
-data class WeeklyHabit(
-    val byDay: Map<DayOfWeek, DailyHabit>
+enum class RoutineMode {
+    DAILY, WEEKLY;
+
+    val otherwise
+        get(): RoutineMode = if (this == DAILY) WEEKLY else DAILY
+}
+
+enum class RoutineType { NONE, WAKE, SLEEP, TASK }
+
+data class RoutineEntry(
+    val type: RoutineType = RoutineType.NONE,
+    val label: String = "",
+    val minute: Int = 0,
+    val id: AlarmId
 )
+
+data class CellKey(val dayIndex: Int, val hour: Int) {
+    init {
+        require(dayIndex in 0..6) { "dayIndex must be 0..6 (Mon..Sun)" }
+        require(hour in 0..23) { "hour must be 0..23" }
+    }
+}
+
+typealias RoutineGrid = Map<CellKey, RoutineEntry>
+
 
 /** 当日の状況をまとめてプロンプト文脈に載せるための軽量ブリーフ */
 data class DayBrief(
@@ -45,3 +68,4 @@ data class ConversationTurn(
     val text: String,
     val at: Instant = Clock.System.now()
 )
+

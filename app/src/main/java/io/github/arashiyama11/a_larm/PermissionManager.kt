@@ -4,20 +4,21 @@ import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import android.Manifest
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
+import androidx.core.net.toUri
 
-class PermissionManager(private val context: Context) {
+@Singleton
+class PermissionManager @Inject constructor(@param:ApplicationContext private val context: Context) {
 
     fun requiredRuntimePermissions(): Array<String> = buildList {
         add(Manifest.permission.RECORD_AUDIO)
         // POST_NOTIFICATIONS is runtime from API 33+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            add(Manifest.permission.POST_NOTIFICATIONS)
-        }
+        add(Manifest.permission.POST_NOTIFICATIONS)
     }.toTypedArray()
 
     fun isMicGranted(): Boolean = isGranted(Manifest.permission.RECORD_AUDIO)
@@ -32,7 +33,7 @@ class PermissionManager(private val context: Context) {
     fun openExactAlarmSettings() {
         // Best-effort: direct to exact alarm permission screen
         val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-            data = Uri.parse("package:${context.packageName}")
+            data = "package:${context.packageName}".toUri()
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(intent)

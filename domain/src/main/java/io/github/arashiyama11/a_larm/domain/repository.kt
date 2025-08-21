@@ -4,24 +4,38 @@ import io.github.arashiyama11.a_larm.domain.models.AlarmId
 import io.github.arashiyama11.a_larm.domain.models.AlarmRule
 import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
+import io.github.arashiyama11.a_larm.domain.models.RoutineMode
 import io.github.arashiyama11.a_larm.domain.models.SessionId
-import io.github.arashiyama11.a_larm.domain.models.UserId
-import io.github.arashiyama11.a_larm.domain.models.WeeklyHabit
+import io.github.arashiyama11.a_larm.domain.models.UserProfile
+import kotlinx.coroutines.flow.Flow
 
-interface HabitRepository {
-    suspend fun getWeeklyHabit(userId: UserId): WeeklyHabit?
-    suspend fun upsertWeeklyHabit(userId: UserId, habit: WeeklyHabit)
+
+interface RoutineRepository {
+    fun load(mode: RoutineMode): Flow<List<AlarmRule>>
+    suspend fun replaceAll(alarmRules: List<AlarmRule>)
+
+    suspend fun delete(alarmId: AlarmId)
+
+    suspend fun upsert(alarmRule: AlarmRule): AlarmId
+
+    suspend fun setRoutineMode(mode: RoutineMode)
+    fun getRoutineMode(): Flow<RoutineMode>
 }
+//
+//interface HabitRepository {
+//    suspend fun getWeeklyHabit(userId: UserId): WeeklyHabit?
+//    suspend fun upsertWeeklyHabit(userId: UserId, habit: WeeklyHabit)
+//}
 
 interface AlarmRuleRepository {
-    suspend fun list(userId: UserId): List<AlarmRule>
-    suspend fun upsert(userId: UserId, rule: AlarmRule)
-    suspend fun remove(userId: UserId, id: AlarmId)
+    suspend fun list(): List<AlarmRule>
+    suspend fun upsert(rule: AlarmRule)
+    suspend fun remove(id: AlarmId)
 }
 
 interface PersonaRepository {
-    suspend fun getCurrent(userId: UserId): AssistantPersona
-    suspend fun setCurrent(userId: UserId, persona: AssistantPersona)
+    suspend fun getCurrent(): AssistantPersona
+    suspend fun setCurrent(persona: AssistantPersona)
 }
 
 interface ConversationLogRepository {
@@ -33,4 +47,9 @@ interface LlmApiKeyRepository {
     suspend fun getKey(): String?
     suspend fun setKey(key: String?)
     suspend fun clearKey()
+}
+
+interface UserProfileRepository {
+    fun getProfile(): Flow<UserProfile?>
+    suspend fun saveProfile(profile: UserProfile)
 }

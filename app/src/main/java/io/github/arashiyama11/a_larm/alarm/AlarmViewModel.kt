@@ -37,11 +37,17 @@ data class AlarmUiState(
     val assistantTalk: List<String> = emptyList()
 )
 
+sealed interface AlarmUiAction {
+    data object Start : AlarmUiAction
+    data object Stop : AlarmUiAction
+}
+
 @HiltViewModel
 class AlarmViewModel @Inject constructor(
     private val ttsGateway: TtsGateway,
     private val llmVoiceChatSessionGateway: LlmVoiceChatSessionGateway,
-    private val audioOutputGateway: AudioOutputGateway
+    private val audioOutputGateway: AudioOutputGateway,
+    private val simpleAlarmAudioGateway: SimpleAlarmAudioGateway
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AlarmUiState())
     val uiState = combine(_uiState, llmVoiceChatSessionGateway.chatState) { uiState, chatState ->
@@ -59,14 +65,33 @@ class AlarmViewModel @Inject constructor(
         date = LocalDateTime.now()
     )
 
+    private var simpleAlarmJob: Job? = null
+
     fun onStart() {
         if (started) return
         started = true
         viewModelScope.launch(Dispatchers.IO) {
             llmVoiceChatSessionGateway.initialize(persona, brief, emptyList())
         }
+        simpleAlarmJob = viewModelScope.launch(Dispatchers.IO) {
+            simpleAlarmAudioGateway.playAlarmSound()
+        }
+
+        viewModelScope.launch {
+            delay(5000)
+            simpleAlarmAudioGateway.stopAlarmSound()
+
+        }
+        llmVoiceChatSessionGateway.response.onEach {
+            println("Received response: $it")
         llmVoiceChatSessionGateway.response.onEach { res ->
             if (uiState.value.phase == AlarmPhase.RINGING) {
+                try {
+                    simpleAlarmAudioGateway.stopAlarmSound()
+                } finally {
+                    simpleAlarmJob?.cancel()
+                    simpleAlarmJob = null
+                }
                 _uiState.update {
                     it.copy(
                         phase = AlarmPhase.TALKING,
@@ -100,5 +125,27 @@ class AlarmViewModel @Inject constructor(
                 }
             }
         }.launchIn(viewModelScope)
+    }
+
+    fun reduce(action: AlarmUiAction) {
+        when (action) {
+            is AlarmUiAction.Start -> {
+                if (!started) {
+                    onStart()
+                }
+            }
+
+            is AlarmUiAction.Stop -> {
+                viewModelScope.launch(Dispatchers.IO) {
+                    llmVoiceChatSessionGateway.stop()
+                    _uiState.update {
+                        it.copy(
+                            phase = AlarmPhase.SUCCESS,
+                            sendingUserVoice = false
+                        )
+                    }
+                }
+            }
+        }
     }
 }

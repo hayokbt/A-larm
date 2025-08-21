@@ -4,14 +4,22 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -19,39 +27,35 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.arashiyama11.a_larm.PermissionManager
+import io.github.arashiyama11.a_larm.domain.models.Gender
+import io.github.arashiyama11.a_larm.ui.theme.AlarmTheme
+import io.github.arashiyama11.a_larm.ui.components.UserProfileForm
 
 @Composable
 fun OnboardingScreen(
     viewModel: OnboardingViewModel = hiltViewModel(),
     navigateToHome: () -> Unit
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val permissionManager = remember { PermissionManager(context) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
         onResult = { results ->
-            viewModel.onPermissionsResult(results)
+            viewModel.updatePhase()
         }
     )
 
     LaunchedEffect(Unit) {
-        // Initialize permission states
-        viewModel.onPermissionsResult(
-            mapOf(
-                Manifest.permission.RECORD_AUDIO to permissionManager.isMicGranted(),
-                Manifest.permission.POST_NOTIFICATIONS to permissionManager.isNotificationsGranted(),
-            )
-        )
-        viewModel.refreshExactAlarmState(permissionManager.canScheduleExactAlarms())
-
-        // Event handling from ViewModel (UI triggers actual permission flows)
+        viewModel.onStart()
         viewModel.events.collect { event ->
             when (event) {
                 OnboardingViewModel.UiEvent.RequestRuntimePermissions -> {
@@ -65,13 +69,7 @@ fun OnboardingScreen(
                     if (toRequest.isNotEmpty()) {
                         permissionLauncher.launch(toRequest.toTypedArray())
                     } else {
-                        // Reflect current state as granted
-                        viewModel.onPermissionsResult(
-                            mapOf(
-                                Manifest.permission.RECORD_AUDIO to true,
-                                Manifest.permission.POST_NOTIFICATIONS to true,
-                            )
-                        )
+                        viewModel.updatePhase()
                     }
                 }
 
@@ -79,44 +77,226 @@ fun OnboardingScreen(
                     permissionManager.openExactAlarmSettings()
                 }
             }
-            // After any event, refresh exact alarm state best-effort
-            viewModel.refreshExactAlarmState(permissionManager.canScheduleExactAlarms())
         }
     }
 
+    Scaffold(modifier = Modifier.fillMaxSize()) { paddingValues ->
+        when (uiState.phase) {
+            OnboardingStep.LOADING -> Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+
+            OnboardingStep.GRANT_PERMISSIONS ->
+                GrantPermissions(
+                    modifier = Modifier.padding(paddingValues),
+                    requestRuntimePermissions = viewModel::requestRuntimePermissions
+                )
+
+            OnboardingStep.USER_PROFILE ->
+                UserProfileStep(
+                    modifier = Modifier.padding(paddingValues),
+                    name = uiState.rawName,
+                    gender = uiState.gender,
+                    displayName = uiState.displayName,
+                    onNameChange = viewModel::onNameChange,
+                    onGenderChange = viewModel::onGenderChange,
+                    onNext = viewModel::updatePhase
+                )
+
+            OnboardingStep.GRANT_API_KEY ->
+                GrantApiKey(
+                    modifier = Modifier.padding(paddingValues),
+                    apiKey = uiState.apiKey,
+                    isSaved = uiState.isApiKeySaved,
+                    onApiKeyChange = viewModel::onApiKeyChange,
+                    onNext = viewModel::updatePhase,
+                    onSaveApiKey = viewModel::onSaveApiKey,
+                    onSkipApiKey = viewModel::skipApiKey
+                )
+
+            OnboardingStep.EXACT_ALARM ->
+                GrantExactAlarm(
+                    modifier = Modifier.padding(paddingValues),
+                    onOpenSettings = viewModel::openExactAlarmSettings,
+                    onNext = viewModel::updatePhase
+                )
+
+            OnboardingStep.COMPLETED ->
+                OnboardingCompleted(
+                    modifier = Modifier.padding(paddingValues),
+                    onNext = navigateToHome
+                )
+        }
+    }
+}
+
+
+@Composable
+fun GrantPermissions(modifier: Modifier, requestRuntimePermissions: () -> Unit) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .padding(24.dp),
-        verticalArrangement = Arrangement.Top,
-        horizontalAlignment = Alignment.Start
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = "A-larm へようこそ")
-        Spacer(Modifier.height(8.dp))
-        Text(text = "AI と会話して起きるための準備をしましょう。")
+        Text(
+            "マイクと通知の権限が必要です",
+            style = MaterialTheme.typography.headlineSmall
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            "AIとの対話とアラームの起動のためにマイクと通知の権限が必要です",
+            style = MaterialTheme.typography.bodyMedium.copy(color = Color.Gray)
+        )
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = requestRuntimePermissions) { Text("権限を許可") }
+    }
+}
 
-        Spacer(Modifier.height(24.dp))
-        OutlinedTextField(
-            value = state.apiKey,
-            onValueChange = viewModel::onApiKeyChange,
-            label = { Text("LLM API キー") },
-            singleLine = true,
+@Composable
+fun UserProfileStep(
+    modifier: Modifier,
+    name: String,
+    displayName: String,
+    gender: Gender?,
+    onNameChange: (String) -> Unit,
+    onGenderChange: (Gender) -> Unit,
+    onNext: () -> Unit
+) {
+    UserProfileForm(
+        modifier = modifier,
+        name = name,
+        displayName = displayName,
+        gender = gender,
+        onNameChange = onNameChange,
+        onGenderChange = onGenderChange,
+        onSubmit = onNext,
+        title = "プロフィールを教えてください",
+        description = "あなたに合わせた応答を生成するために利用します。この情報は後から変更できます。",
+        submitLabel = "次へ",
+        fillAndCenter = true
+    )
+}
+
+@Composable
+fun GrantApiKey(
+    modifier: Modifier,
+    apiKey: String,
+    isSaved: Boolean,
+    onApiKeyChange: (String) -> Unit,
+    onNext: () -> Unit,
+    onSaveApiKey: () -> Unit,
+    onSkipApiKey: () -> Unit
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            "APIキーを入力してください",
+            style = MaterialTheme.typography.headlineSmall
         )
 
-        Spacer(Modifier.height(24.dp))
-        Text("権限の状態")
-        Spacer(Modifier.height(8.dp))
-        Row { Text("マイク: "); Text(if (state.micGranted) "許可済み" else "未許可") }
-        Row { Text("通知: "); Text(if (state.notificationsGranted) "許可済み" else "未許可") }
-        Row { Text("正確なアラーム: "); Text(if (state.exactAlarmAllowed) "許可済み/不要" else "未許可") }
-
         Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = viewModel::requestRuntimePermissions) { Text("通知・マイクを許可") }
-            Button(onClick = viewModel::openExactAlarmSettings) { Text("正確なアラーム設定") }
+        Text(
+            "AIとの対話にはGoogle Gemini APIキーが必要です。まだ持っていない場合は、Google Cloud Consoleで取得してください。APIキーは後で設定から変更できます。",
+            style = MaterialTheme.typography.bodyMedium.copy(color = Color.Gray)
+        )
+        Spacer(Modifier.height(16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = apiKey,
+                onValueChange = onApiKeyChange,
+                label = { Text("API キー") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = onSaveApiKey, enabled = !isSaved) { Text("保存") }
         }
 
-        Spacer(Modifier.height(24.dp))
-        Button(onClick = { navigateToHome() }, enabled = true) { Text("開始する") }
+        Spacer(Modifier.height(16.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            OutlinedButton(onClick = onSkipApiKey) { Text("スキップ") }
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = onNext, enabled = isSaved) { Text("次へ") }
+        }
+    }
+}
+
+@Composable
+fun GrantExactAlarm(
+    modifier: Modifier,
+    onOpenSettings: () -> Unit,
+    onNext: () -> Unit
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            "正確なアラームの許可が必要です",
+            style = MaterialTheme.typography.headlineSmall
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            "正確なアラームを使用するには、設定から「正確なアラーム」を有効にする必要があります。",
+            style = MaterialTheme.typography.bodyMedium.copy(color = Color.Gray)
+        )
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onOpenSettings) { Text("設定を開く") }
+        Spacer(Modifier.height(16.dp))
+        Button(onNext) {
+            Text("次へ")
+        }
+    }
+}
+
+@Composable
+fun OnboardingCompleted(
+    modifier: Modifier,
+    onNext: () -> Unit
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("初期設定が完了しました！", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onNext) { Text("ホームへ") }
+    }
+}
+
+
+@Preview
+@Composable
+fun Preview() {
+    AlarmTheme {
+        Surface {
+            GrantApiKey(
+                modifier = Modifier.fillMaxSize(),
+                apiKey = "",
+                isSaved = false,
+                onApiKeyChange = { },
+                onNext = { },
+                onSaveApiKey = { },
+                onSkipApiKey = { }
+            )
+        }
     }
 }
