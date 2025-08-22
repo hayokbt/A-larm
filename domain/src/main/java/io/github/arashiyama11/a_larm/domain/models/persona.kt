@@ -1,6 +1,5 @@
 package io.github.arashiyama11.a_larm.domain.models
 
-
 data class AssistantPersona(
     val id: String,
     val displayName: String,
@@ -23,10 +22,8 @@ enum class Energy { Low, Medium, High }
 
 
 data class VoiceStyle(
-    val voiceId: String?,      // engine依存のIDを格納（infraで解釈）
-    val pitchSemitone: Int? = null,
-    val speakingRate: Double? = null, // 1.0=標準
-    val emotion: String? = null       // "happy", "gentle" 等。infra側で解釈/無視OK
+    val speaker: String,
+    val emotion: String
 )
 
 enum class LlmProvider { OpenAI, Google, Grok, Local }
