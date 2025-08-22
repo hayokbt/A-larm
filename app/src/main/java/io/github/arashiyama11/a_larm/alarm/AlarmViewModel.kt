@@ -6,12 +6,14 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.arashiyama11.a_larm.domain.AudioOutputGateway
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatSessionGateway
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatState
+import io.github.arashiyama11.a_larm.domain.SimpleAlarmAudioGateway
 import io.github.arashiyama11.a_larm.domain.TtsGateway
 import io.github.arashiyama11.a_larm.domain.VoiceChatResponse
 import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.DayBrief
 import io.github.arashiyama11.a_larm.domain.models.PromptStyle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -20,7 +22,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
 
@@ -77,13 +78,6 @@ class AlarmViewModel @Inject constructor(
             simpleAlarmAudioGateway.playAlarmSound()
         }
 
-        viewModelScope.launch {
-            delay(5000)
-            simpleAlarmAudioGateway.stopAlarmSound()
-
-        }
-        llmVoiceChatSessionGateway.response.onEach {
-            println("Received response: $it")
         llmVoiceChatSessionGateway.response.onEach { res ->
             if (uiState.value.phase == AlarmPhase.RINGING) {
                 try {
@@ -126,6 +120,7 @@ class AlarmViewModel @Inject constructor(
             }
         }.launchIn(viewModelScope)
     }
+
 
     fun reduce(action: AlarmUiAction) {
         when (action) {

@@ -1,13 +1,11 @@
 package io.github.arashiyama11.a_larm.infra
 
 import android.Manifest
-import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
 import androidx.annotation.RequiresPermission
-import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.arashiyama11.a_larm.domain.LlmApiKeyRepository
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatSessionGateway
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatState
@@ -16,7 +14,6 @@ import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.DayBrief
 import io.github.arashiyama11.a_larm.domain.models.Role
-import io.github.arashiyama11.a_larm.infra.LlmVoiceChatSessionGatewayImpl.Companion.TAG
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -132,12 +129,7 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
             })
         }
         install(Logging) {
-            level = LogLevel.ALL
-            logger = object : Logger {
-                override fun log(message: String) {
-                    Log.d(TAG, message)
-                }
-            }
+
         }
     }
 
@@ -148,6 +140,7 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
     }
 
     init {
+        Json.Default
         CoroutineScope(Dispatchers.Default).launch {
             while (isActive) {
                 Log.d(TAG, "Session active: ${isSessionActive.get()} ${webSocketSession?.isActive}")

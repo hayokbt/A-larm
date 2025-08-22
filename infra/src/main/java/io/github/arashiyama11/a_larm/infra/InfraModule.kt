@@ -35,7 +35,9 @@ object DbModule {
     @Provides
     @Singleton
     fun provideDb(@ApplicationContext ctx: Context): RoutineDatabase =
-        Room.databaseBuilder(ctx, RoutineDatabase::class.java, "routine.db").build()
+        Room.databaseBuilder(ctx, RoutineDatabase::class.java, "routine.db")
+            .fallbackToDestructiveMigration()
+            .build()
 
     @Provides
     fun provideRoutineDao(db: RoutineDatabase): RoutineDao = db.routineDao()

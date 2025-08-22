@@ -112,7 +112,9 @@ fun AlarmScreen(
                 uiState.assistantTalk.joinToString("\n"),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                modifier = Modifier.verticalScroll(rememberScrollState())
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .weight(1f)
             )
 
             uiState.startAt?.let { startAt ->
