@@ -131,7 +131,7 @@ app.get('/', (req, res) => {
 });
 
 // サーバー起動時にVOICEVOXの接続確認
-app.listen(PORT, async () => {
+app.listen(PORT,"0.0.0.0", async () => {
   console.log(`Server running on http://localhost:${PORT}`);
   
   // 文字エンコーディングの確認

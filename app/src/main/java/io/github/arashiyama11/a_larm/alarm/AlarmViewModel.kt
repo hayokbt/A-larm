@@ -1,5 +1,6 @@
 package io.github.arashiyama11.a_larm.alarm
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,6 +15,7 @@ import io.github.arashiyama11.a_larm.domain.models.DayBrief
 import io.github.arashiyama11.a_larm.domain.models.PromptStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -78,43 +80,51 @@ class AlarmViewModel @Inject constructor(
             simpleAlarmAudioGateway.playAlarmSound()
         }
 
-        llmVoiceChatSessionGateway.response.onEach { res ->
-            if (uiState.value.phase == AlarmPhase.RINGING) {
-                try {
-                    simpleAlarmAudioGateway.stopAlarmSound()
-                } finally {
-                    simpleAlarmJob?.cancel()
-                    simpleAlarmJob = null
-                }
-                _uiState.update {
-                    it.copy(
-                        phase = AlarmPhase.TALKING,
-                        sendingUserVoice = false,
-                        startAt = LocalDateTime.now()
-                    )
-                }
-            }
-
-            when (res) {
-                is VoiceChatResponse.Text -> {
-                    ttsGateway.speak(res.text)
+        llmVoiceChatSessionGateway.response.onEach {
+            Log.d("AlarmViewModel", "Response received: $it")
+        }.onEach { res ->
+            coroutineScope {
+                if (uiState.value.phase == AlarmPhase.RINGING) {
+                    try {
+                        simpleAlarmAudioGateway.stopAlarmSound()
+                    } finally {
+                        simpleAlarmJob?.cancel()
+                        simpleAlarmJob = null
+                    }
                     _uiState.update {
                         it.copy(
-                            assistantTalk = it.assistantTalk + res.text,
+                            phase = AlarmPhase.TALKING,
+                            sendingUserVoice = false,
+                            startAt = LocalDateTime.now()
                         )
                     }
                 }
 
-                is VoiceChatResponse.Voice -> {
-                    audioOutputGateway.play(res.data)
-                }
+                when (res) {
+                    is VoiceChatResponse.Text -> {
+                        launch {
+                            llmVoiceChatSessionGateway.setTtsPlaying(true)
+                            ttsGateway.speak(res.text)
+                            llmVoiceChatSessionGateway.setTtsPlaying(false)
+                        }
+                        _uiState.update {
+                            it.copy(
+                                assistantTalk = it.assistantTalk + res.text,
+                            )
+                        }
+                    }
 
-                is VoiceChatResponse.Error -> {
-                    _uiState.update {
-                        it.copy(
-                            phase = AlarmPhase.FAILED_RESPONSE,
-                            sendingUserVoice = false
-                        )
+                    is VoiceChatResponse.Voice -> {
+                        audioOutputGateway.play(res.data)
+                    }
+
+                    is VoiceChatResponse.Error -> {
+                        _uiState.update {
+                            it.copy(
+                                phase = AlarmPhase.FAILED_RESPONSE,
+                                sendingUserVoice = false
+                            )
+                        }
                     }
                 }
             }

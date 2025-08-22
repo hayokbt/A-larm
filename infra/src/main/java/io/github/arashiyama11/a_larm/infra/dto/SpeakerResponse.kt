@@ -20,5 +20,4 @@ data class Style(
 @Serializable
 data class SpeakRequest(
     val text: String,
-    val speaker: Int? = null
 )

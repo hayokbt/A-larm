@@ -62,15 +62,6 @@ class AlarmService : Service() {
             startActivity(fsIntent)
         }
 
-
-        // お好みでR.raw.alarm_soundに音源を置く
-        CoroutineScope(Dispatchers.Default).launch {
-            repeat(5) {
-                ttsGateway.speak("朝田愛菜「朝だよー」")
-                delay(1000)
-            }
-        }
-
         return START_NOT_STICKY
     }
 

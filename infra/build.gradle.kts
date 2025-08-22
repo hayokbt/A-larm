@@ -16,6 +16,9 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
+        buildConfigField("String", "APP_VERSION", "\"${project.version}\"")
+        buildConfigField("String", "SERVER_URL", "\"http://192.168.11.6\"")
+        buildConfigField("int", "SERVER_PORT", "3000")
     }
 
     buildTypes {
@@ -37,6 +40,10 @@ android {
 
     room {
         schemaDirectory("$projectDir/schemas")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 }
 
@@ -60,6 +67,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.room.runtime)
     ksp(libs.room.compiler)
+    implementation(libs.exoPlayer)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

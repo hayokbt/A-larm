@@ -4,6 +4,9 @@ import android.Manifest
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.AutomaticGainControl
+import android.media.audiofx.NoiseSuppressor
 import android.util.Log
 import androidx.annotation.RequiresPermission
 import io.github.arashiyama11.a_larm.domain.LlmApiKeyRepository
@@ -43,6 +46,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlin.math.max
+import kotlin.math.min
 
 @Serializable
 data class GeminiLiveMessage(
@@ -143,7 +148,7 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
         Json.Default
         CoroutineScope(Dispatchers.Default).launch {
             while (isActive) {
-                Log.d(TAG, "Session active: ${isSessionActive.get()} ${webSocketSession?.isActive}")
+                Log.d(TAG, "Session active: ${webSocketSession?.isActive} ${ttsPlaying.get()}")
                 if (webSocketSession?.isActive == false || webSocketSession == null) {
                     Log.d(TAG, "WebSocket session is not active, attempting to reconnect")
                     _chatState.value = LlmVoiceChatState.ERROR
@@ -162,6 +167,53 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
     private val audioDataChannel = Channel<ByteArray>(Channel.UNLIMITED)
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    // TTS / AEC / NS / AGC state & tuning
+    private val ttsPlaying = java.util.concurrent.atomic.AtomicBoolean(false)
+    private var aec: AcousticEchoCanceler? = null
+    private var ns: NoiseSuppressor? = null
+    private var agc: AutomaticGainControl? = null
+
+    // Basic thresholds (tune per-device)
+    @Volatile
+    private var silenceThreshold = 50.0     // 無音/小ノイズ除外 (RMS)
+
+    @Volatile
+    private var ttsGateThreshold = 100.0    // TTS 再生中でも「声」と判断する閾値 (RMS)
+
+    @Volatile
+    private var gateMultiplier = 2.0        // noiseEstimate に対する倍率
+
+    // dynamic noise estimate
+    private var noiseEstimate = 0.0
+    private val noiseAlpha = 0.98 // ノイズ推定の滑らかさ
+
+    // toggles for testing
+    @Volatile
+    private var forceDisableAec = false
+    fun setForceDisableAec(disable: Boolean) {
+        forceDisableAec = disable
+    }
+
+    @Volatile
+    private var enableAgc = true
+    fun setEnableAgc(enable: Boolean) {
+        enableAgc = enable
+    }
+
+    // exposed for external control
+    override fun setTtsPlaying(isPlaying: Boolean) {
+        ttsPlaying.set(isPlaying)
+    }
+
+    // 実機チューニング用（オプション）
+    fun setVadThresholds(silence: Double, ttsGate: Double) {
+        silenceThreshold = silence
+        ttsGateThreshold = ttsGate
+    }
+
+    fun setGateMultiplier(mult: Double) {
+        gateMultiplier = mult
+    }
 
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     @OptIn(ExperimentalEncodingApi::class)
@@ -251,12 +303,10 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
     @OptIn(ExperimentalEncodingApi::class)
     private fun startAudioRecording() {
         try {
-            val bufferSize = AudioRecord.getMinBufferSize(
-                SAMPLE_RATE,
-                CHANNEL_CONFIG,
-                AUDIO_FORMAT
-            ) * BUFFER_SIZE_MULTIPLIER
+            val min = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
+            val bufferSize = (min * BUFFER_SIZE_MULTIPLIER).coerceAtLeast(min)
 
+            // 初期は MIC にしておく（VOICE_COMMUNICATION は端末依存で過度に処理することあり）
             audioRecord = AudioRecord(
                 MediaRecorder.AudioSource.MIC,
                 SAMPLE_RATE,
@@ -265,27 +315,80 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
                 bufferSize
             )
 
+            // もし初期化失敗なら VOICE_COMMUNICATION 試行（逆順でも可）
+            if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
+                Log.w(TAG, "MIC failed, trying VOICE_COMMUNICATION")
+                audioRecord?.release()
+                audioRecord = AudioRecord(
+                    MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                    SAMPLE_RATE,
+                    CHANNEL_CONFIG,
+                    AUDIO_FORMAT,
+                    bufferSize
+                )
+            }
+
             if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
                 Log.e(TAG, "AudioRecord initialization failed")
                 return
             }
+
+            // AEC/NS/AGC 有効化（端末依存）
+            enableAudioEffectsIfAvailable()
 
             audioRecord?.startRecording()
             isRecording.set(true)
 
             recordingJob = coroutineScope.launch {
                 val buffer = ByteArray(bufferSize)
-                Log.d(TAG, "Audio recording started")
+                Log.d(TAG, "Audio recording started (buffer=$bufferSize)")
 
                 while (isRecording.get() && isActive) {
                     val bytesRead = audioRecord?.read(buffer, 0, buffer.size) ?: 0
                     if (bytesRead > 0) {
-                        val audioData = buffer.copyOf(bytesRead)
-                        audioDataChannel.trySend(audioData)
-                        sendAudioData(audioData)
+                        val frame = buffer.copyOf(bytesRead)
+                        val energy = rmsLevel(frame, bytesRead)
+
+                        // ノイズフロア推定（低エネルギーフレームで更新）
+                        // 小さいフレームをノイズ寄りとして混ぜてゆっくり更新
+                        if (energy < max(50.0, silenceThreshold)) {
+                            noiseEstimate = noiseAlpha * noiseEstimate + (1.0 - noiseAlpha) * energy
+                        }
+
+                        // 動的閾値を算出
+                        val dynamicThreshold = max(silenceThreshold, noiseEstimate * gateMultiplier)
+
+                        if (ttsPlaying.get()) {
+                            // TTS中はユーザ発話を拾いたい -> 動的閾値と ttsGateThreshold の小さい方を使う
+                            val effectiveTtsThreshold = min(ttsGateThreshold, dynamicThreshold)
+                            if (energy >= effectiveTtsThreshold) {
+                                audioDataChannel.trySend(frame)
+                                sendAudioData(frame)
+                            } else {
+                                // drop frame (おそらくTTSのエコー)
+                            }
+                        } else {
+                            // 通常時は noiseEstimate ベースの閾値で送信（ヒステリシスの導入可能）
+                            if (energy >= max(silenceThreshold, noiseEstimate * 1.5)) {
+                                audioDataChannel.trySend(frame)
+                                sendAudioData(frame)
+                            }
+                        }
+
+                        // デバッグログ（1秒に1回程度に抑える）
+                        if (System.currentTimeMillis() % 1000L < 40L) {
+                            Log.d(
+                                TAG,
+                                "RMS=${"%.1f".format(energy)} noise=${"%.1f".format(noiseEstimate)} tts=${ttsPlaying.get()} dynTh=${
+                                    "%.1f".format(
+                                        dynamicThreshold
+                                    )
+                                }"
+                            )
+                        }
                     }
 
-                    delay(50) // 50msごとに音声データを送信
+                    delay(30) // 送信粒度を若干短縮
                 }
 
                 Log.d(TAG, "Audio recording stopped")
@@ -301,14 +404,108 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
         try {
             isRecording.set(false)
             recordingJob?.cancel()
+
+            // AEC/NS/AGC 解放
+            releaseAudioEffects()
+
             audioRecord?.stop()
             audioRecord?.release()
             audioRecord = null
-            audioDataChannel.close()
+
+            // Channel は複数回 close されないようにチェック
+            if (!audioDataChannel.isClosedForSend) {
+                audioDataChannel.close()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping audio recording", e)
         }
     }
+
+    // -------- [AEC/NS/AGC ユーティリティ] --------
+    private fun enableAudioEffectsIfAvailable() {
+        try {
+            val sessionId = audioRecord?.audioSessionId ?: return
+
+            // AEC
+            if (!forceDisableAec && AcousticEchoCanceler.isAvailable()) {
+                aec = AcousticEchoCanceler.create(sessionId)?.apply {
+                    try {
+                        enabled = true
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to enable AEC: ${e.message}")
+                    }
+                }
+                Log.d(TAG, "AEC enabled: ${aec?.enabled}")
+            } else {
+                Log.d(TAG, "AEC not enabled (not available or forced off)")
+            }
+
+            // NS
+            if (NoiseSuppressor.isAvailable()) {
+                ns = NoiseSuppressor.create(sessionId)?.apply {
+                    try {
+                        enabled = true
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to enable NS: ${e.message}")
+                    }
+                }
+                Log.d(TAG, "NS enabled: ${ns?.enabled}")
+            } else {
+                Log.d(TAG, "NS not available")
+            }
+
+            // AGC（自動増幅。端末依存）
+            if (enableAgc && AutomaticGainControl.isAvailable()) {
+                agc = AutomaticGainControl.create(sessionId)?.apply {
+                    try {
+                        enabled = true
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to enable AGC: ${e.message}")
+                    }
+                }
+                Log.d(TAG, "AGC enabled: ${agc?.enabled}")
+            } else {
+                Log.d(TAG, "AGC not enabled (not available or disabled)")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to enable audio effects: ${e.message}")
+        }
+    }
+
+    private fun releaseAudioEffects() {
+        try {
+            aec?.release(); aec = null
+        } catch (_: Exception) {
+        }
+        try {
+            ns?.release(); ns = null
+        } catch (_: Exception) {
+        }
+        try {
+            agc?.release(); agc = null
+        } catch (_: Exception) {
+        }
+    }
+    // -----------------------------------------
+
+    // -------- [VAD（RMS）ユーティリティ] --------
+    private fun rmsLevel(buffer: ByteArray, bytes: Int): Double {
+        val n = bytes - (bytes % 2)
+        if (n <= 0) return 0.0
+        var sum = 0.0
+        var i = 0
+        while (i < n) {
+            val lo = buffer[i].toInt() and 0xFF
+            val hi = buffer[i + 1].toInt()
+            val sample = (hi shl 8) or lo
+            val s = sample.toDouble()
+            sum += s * s
+            i += 2
+        }
+        val mean = sum / (n / 2)
+        return kotlin.math.sqrt(mean)
+    }
+    // ------------------------------------------
 
     @OptIn(ExperimentalEncodingApi::class)
     private fun startMessageProcessing() {
@@ -398,14 +595,11 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
                         processingVoiceResponseText.clear()
                     }
                     Log.d(TAG, "Turn completed")
-                    //_chatState.value = LlmVoiceChatState.USER_SPEAKING
                 }
             }
 
-            // 直接のターン完了メッセージ
             if (message.containsKey("turnComplete")) {
                 Log.d(TAG, "Turn completed (direct)")
-                //_chatState.value = LlmVoiceChatState.
             }
 
         } catch (e: Exception) {
@@ -425,7 +619,6 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
                     val audioData = extractAudioDataFromParts(parts)
                     if (!audioData.isNullOrBlank()) {
                         processingVoiceResponseText.append(audioData)
-                        // _response.emit(VoiceChatResponse.Voice(audioData))
                     }
                 }
 
@@ -458,7 +651,6 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
             null
         }
     }
-
 
     @OptIn(InternalAPI::class)
     private suspend fun connect(apiKey: String): DefaultClientWebSocketSession {
@@ -519,7 +711,6 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
         }
     }
 }
-
 
 private fun buildSetupRequest(
     responseAudio: Boolean = false,

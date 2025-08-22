@@ -98,6 +98,8 @@ interface LlmVoiceChatSessionGateway {
 
     suspend fun stop()
 
+    fun setTtsPlaying(isPlaying: Boolean)
+
     val chatState: StateFlow<LlmVoiceChatState>
     val response: Flow<VoiceChatResponse>
 }
