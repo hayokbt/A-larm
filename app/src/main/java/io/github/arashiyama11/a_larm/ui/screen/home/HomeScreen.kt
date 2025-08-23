@@ -57,17 +57,5 @@ fun HomeScreen(
             //Button(onClick = { onChangeRoutineMode(RoutineMode.Weekly) }) { Text("週単位") }
         }
         Spacer(Modifier.height(8.dp))
-
-        Text("デバッグでここにアラーム用UIを表示")
-        Box(
-            modifier = Modifier
-                .border(
-                    1.dp, MaterialTheme.colorScheme.primary,
-                    RoundedCornerShape(4.dp)
-                )
-                .padding(8.dp)
-        ) {
-            AlarmRoute { }
-        }
     }
 }

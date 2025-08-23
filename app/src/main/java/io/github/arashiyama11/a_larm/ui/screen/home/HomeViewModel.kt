@@ -13,6 +13,7 @@ import io.github.arashiyama11.a_larm.domain.models.PromptStyle
 import io.github.arashiyama11.a_larm.domain.models.Role
 import io.github.arashiyama11.a_larm.domain.models.RoutineMode
 import io.github.arashiyama11.a_larm.domain.usecase.AlarmRulesUseCase
+import io.github.arashiyama11.a_larm.infra.TtsGatewayImpl
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,6 +40,7 @@ class HomeViewModel @Inject constructor(
     private val llmChatGateway: LlmChatGateway,
     private val routineRepository: RoutineRepository,
     private val alarmRulesUseCase: AlarmRulesUseCase,
+    private val ttsGatewayImpl: TtsGatewayImpl
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())

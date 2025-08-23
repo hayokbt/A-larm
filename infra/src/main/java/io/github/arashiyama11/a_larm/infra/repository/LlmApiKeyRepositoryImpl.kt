@@ -22,9 +22,11 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = STORE_NAME)
 
+@OptIn(ExperimentalEncodingApi::class)
 class LlmApiKeyRepositoryImpl @Inject constructor(
     @param:ApplicationContext private val context: Context
 ) : LlmApiKeyRepository {
