@@ -44,7 +44,6 @@ data class HomeUiState(
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val llmChatGateway: LlmChatGateway,
     private val routineRepository: RoutineRepository,
     private val alarmRulesUseCase: AlarmRulesUseCase,
     private val personaRepository: PersonaRepository
@@ -159,51 +158,6 @@ class HomeViewModel @Inject constructor(
             )
         }
         // デフォルトのアラーム時刻を再計算
-    }
-
-    @OptIn(ExperimentalTime::class)
-    fun sendMessage(message: String) {
-        // ここでメッセージを送信するロジックを実装
-        // 例えば、LlmChatGatewayを使ってAIと対話するなど
-        _uiState.update {
-            it.copy(
-                history = it.history + ConversationTurn(
-                    role = Role.User,
-                    text = message
-                )
-            )
-        }
-
-
-        val currentPersona = uiState.value.selectedPersona ?: return
-
-        llmChatGateway.streamReply(currentPersona, brief, uiState.value.history)
-            .onEach { chunk ->
-                // チャンクを受け取ったら、履歴に追加
-                val res = when (chunk) {
-                    is LlmChunk.Text -> chunk.delta
-                    is LlmChunk.Error -> chunk.message
-                }
-                _uiState.update { currentState ->
-                    if (currentState.history.lastOrNull()?.role == Role.Assistant) {
-                        // 直前のアシスタントの応答があれば、更新
-                        val last = currentState.history.last()
-                        currentState.copy(
-                            history = currentState.history.dropLast(1) + ConversationTurn(
-                                role = Role.Assistant,
-                                text = last.text + res
-                            )
-                        )
-                    } else {
-                        currentState.copy(
-                            history = currentState.history + ConversationTurn(
-                                role = Role.Assistant,
-                                text = res
-                            )
-                        )
-                    }
-                }
-            }.launchIn(viewModelScope)
     }
 }
 
