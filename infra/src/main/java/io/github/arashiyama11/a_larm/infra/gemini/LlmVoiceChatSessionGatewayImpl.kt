@@ -1,4 +1,4 @@
-package io.github.arashiyama11.a_larm.infra
+package io.github.arashiyama11.a_larm.infra.gemini
 
 import android.Manifest
 import android.media.AudioFormat
@@ -16,7 +16,9 @@ import io.github.arashiyama11.a_larm.domain.VoiceChatResponse
 import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.DayBrief
+import io.github.arashiyama11.a_larm.domain.models.Energy
 import io.github.arashiyama11.a_larm.domain.models.Role
+import io.github.arashiyama11.a_larm.domain.models.Tone
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -43,11 +45,10 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonArray
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
-import javax.inject.Singleton
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.math.max
-import kotlin.math.min
+import kotlin.math.sqrt
 
 @Serializable
 data class GeminiLiveMessage(
@@ -102,8 +103,6 @@ data class GeminiPart(
     val text: String
 )
 
-
-@Singleton
 class LlmVoiceChatSessionGatewayImpl @Inject constructor(
     private val llmApiKeyRepository: LlmApiKeyRepository
 ) : LlmVoiceChatSessionGateway {
@@ -138,6 +137,8 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
         }
     }
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -145,13 +146,16 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
     }
 
     init {
-        Json.Default
-        CoroutineScope(Dispatchers.Default).launch {
+        scope.launch {
+            var failCount = 0
             while (isActive) {
                 Log.d(TAG, "Session active: ${webSocketSession?.isActive} ${ttsPlaying.get()}")
                 if (webSocketSession?.isActive == false || webSocketSession == null) {
+                    failCount++
                     Log.d(TAG, "WebSocket session is not active, attempting to reconnect")
-                    _chatState.value = LlmVoiceChatState.ERROR
+                    if (failCount > 1) {
+                        _chatState.value = LlmVoiceChatState.ERROR
+                    }
                 }
                 delay(1000)
             }
@@ -168,7 +172,7 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // TTS / AEC / NS / AGC state & tuning
-    private val ttsPlaying = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val ttsPlaying = AtomicBoolean(false)
     private var aec: AcousticEchoCanceler? = null
     private var ns: NoiseSuppressor? = null
     private var agc: AutomaticGainControl? = null
@@ -273,6 +277,7 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
 
     override suspend fun stop() {
         try {
+            scope.cancel()
             _chatState.value = LlmVoiceChatState.STOPPING
             Log.d(TAG, "Stopping session")
 
@@ -359,14 +364,8 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
                         val dynamicThreshold = max(silenceThreshold, noiseEstimate * gateMultiplier)
 
                         if (ttsPlaying.get()) {
-                            // TTS中はユーザ発話を拾いたい -> 動的閾値と ttsGateThreshold の小さい方を使う
-                            val effectiveTtsThreshold = min(ttsGateThreshold, dynamicThreshold)
-                            if (energy >= effectiveTtsThreshold) {
-                                audioDataChannel.trySend(frame)
-                                sendAudioData(frame)
-                            } else {
-                                // drop frame (おそらくTTSのエコー)
-                            }
+                            // 強制スキップ: TTS再生中は一切送信しない（自己応答防止のため）
+                            // ここでは noiseEstimate の更新のみ行い、音声フレームは捨てる
                         } else {
                             // 通常時は noiseEstimate ベースの閾値で送信（ヒステリシスの導入可能）
                             if (energy >= max(silenceThreshold, noiseEstimate * 1.5)) {
@@ -503,7 +502,7 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
             i += 2
         }
         val mean = sum / (n / 2)
-        return kotlin.math.sqrt(mean)
+        return sqrt(mean)
     }
     // ------------------------------------------
 
@@ -546,6 +545,11 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
 
     private val processingResponseText = StringBuilder()
 
+    var setupHandler: (suspend LlmVoiceChatSessionGateway.() -> Unit)? = null
+    override fun onSetupComplete(action: suspend LlmVoiceChatSessionGateway.() -> Unit) {
+        setupHandler = action
+    }
+
     @OptIn(ExperimentalEncodingApi::class)
     private suspend fun processGeminiMessage(message: JsonObject) {
         try {
@@ -555,6 +559,7 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
             if (message.containsKey("setupComplete")) {
                 Log.d(TAG, "Setup completed")
                 _chatState.value = LlmVoiceChatState.ACTIVE
+                setupHandler?.invoke(this)
                 return
             }
 
@@ -585,7 +590,14 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
                 val turnComplete = serverContent["turnComplete"]
                 if (turnComplete != null) {
                     if (processingResponseText.isNotEmpty()) {
-                        _response.emit(VoiceChatResponse.Text(processingResponseText.toString()))
+
+                        _response.emit(
+                            VoiceChatResponse.Text(
+                                parseConversationTurns(
+                                    processingResponseText.toString()
+                                )
+                            )
+                        )
                         processingResponseText.clear()
                     } else if (processingVoiceResponseText.isNotEmpty()) {
                         //base64してから
@@ -659,6 +671,36 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
             parameter("alt", "ws")
         }
         return session
+    }
+
+    override suspend fun sendSystemMessage(message: String) {
+        try {
+            if (message.isBlank()) {
+                Log.w(TAG, "Empty system message, skipping send")
+                return
+            }
+            Log.d(TAG, "Sending system message: $message")
+            sendGeminiMessage("<system>$message</system>")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending system message: ${e.message}", e)
+        }
+    }
+
+    private suspend fun sendGeminiMessage(message: String) {
+        val req = buildJsonObject {
+            put("realtimeInput", buildJsonObject {
+                put("text", message)
+            })
+        }
+        try {
+            if (sendMessage(req.toString())) {
+                Log.d(TAG, "Message sent successfully: $message")
+            } else {
+                Log.w(TAG, "Failed to send message: $message")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending Gemini message: ${e.message}", e)
+        }
     }
 
     private suspend fun sendMessage(message: String): Boolean {
@@ -768,6 +810,34 @@ private fun buildSystemInstruction(
     history: List<ConversationTurn>
 ): GeminiSystemInstruction {
     val promptBuilder = StringBuilder()
+    promptBuilder.append(
+        """
+        あなたは構造化レスポンスを厳格に出力するシステムです。以下のルールを**必ず**守ってください。
+
+        1) 出力は**必ず**次の2つのタグだけで構成してください（順序も厳守）：
+           <user>...</user><response>...</response>
+
+        2) 出力は**それ以外のテキストを含んではいけません**。説明、注釈、余分な改行、メタ情報、一切禁止です。
+
+        3) タグ内の内容は生テキスト（ユーザー発言やアシスタント返答）です。HTML特殊文字は必要に応じてエスケープしてください（例: `&lt;` `&gt;` `&amp;`）。
+
+        4) もしタスクを実行できない場合でも、フォーマットだけは守ってください。例:
+           <user></user><response></response>
+
+        5) 応答は短くてもよいが、タグ構造は必須。余計な空白やボディ外の文字は出力しないこと。
+
+        例（望ましい出力）:
+        <user>今日は天気どう？</user><response>今日は晴れです。</response>
+
+        例（許可しない出力）:
+        - "OK. <user>...</user><response>...</response>" （先頭にOKを付けるのは禁止）
+        - JSON や追加説明を付与することは禁止
+
+        出力はこれだけ（タグのみ）。理解したら、以降のすべての応答でこのフォーマットに従ってください。
+    """.trimIndent()
+    )
+
+    promptBuilder.append("""また入力の、<system></system> タグの中身はユーザーの入力でなくシステムの指示です。systemタグの内容に従い、この場合は<user></user><response>あなたのレスポンス</response>のようにuserタグを空にして出力してください。""")
 
     // ペルソナ情報
     promptBuilder.append("あなたは${persona.displayName}として振る舞ってください。")
@@ -830,19 +900,19 @@ private fun buildSystemInstruction(
 }
 
 
-private fun getToneDescription(tone: io.github.arashiyama11.a_larm.domain.models.Tone): String =
+private fun getToneDescription(tone: Tone): String =
     when (tone) {
-        io.github.arashiyama11.a_larm.domain.models.Tone.Friendly -> "親しみやすい"
-        io.github.arashiyama11.a_larm.domain.models.Tone.Strict -> "厳格"
-        io.github.arashiyama11.a_larm.domain.models.Tone.Cheerful -> "明るい"
-        io.github.arashiyama11.a_larm.domain.models.Tone.Deadpan -> "無表情"
+        Tone.Friendly -> "親しみやすい"
+        Tone.Strict -> "厳格"
+        Tone.Cheerful -> "明るい"
+        Tone.Deadpan -> "無表情"
     }
 
-private fun getEnergyDescription(energy: io.github.arashiyama11.a_larm.domain.models.Energy): String =
+private fun getEnergyDescription(energy: Energy): String =
     when (energy) {
-        io.github.arashiyama11.a_larm.domain.models.Energy.Low -> "落ち着いた"
-        io.github.arashiyama11.a_larm.domain.models.Energy.Medium -> "普通"
-        io.github.arashiyama11.a_larm.domain.models.Energy.High -> "活発"
+        Energy.Low -> "落ち着いた"
+        Energy.Medium -> "普通"
+        Energy.High -> "活発"
     }
 
 

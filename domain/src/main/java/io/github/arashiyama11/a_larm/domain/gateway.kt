@@ -100,6 +100,10 @@ interface LlmVoiceChatSessionGateway {
 
     fun setTtsPlaying(isPlaying: Boolean)
 
+    suspend fun sendSystemMessage(message: String)
+
+    fun onSetupComplete(action: suspend LlmVoiceChatSessionGateway.() -> Unit)
+
     val chatState: StateFlow<LlmVoiceChatState>
     val response: Flow<VoiceChatResponse>
 }
@@ -122,7 +126,7 @@ sealed interface VoiceChatResponse {
         }
     }
 
-    data class Text(val text: String) : VoiceChatResponse
+    data class Text(val texts: List<ConversationTurn>) : VoiceChatResponse
 
     data class Error(val message: String) : VoiceChatResponse
 }

@@ -22,6 +22,7 @@ import io.github.arashiyama11.a_larm.domain.SimpleAlarmAudioGateway
 import io.github.arashiyama11.a_larm.domain.SttGateway
 import io.github.arashiyama11.a_larm.domain.TtsGateway
 import io.github.arashiyama11.a_larm.domain.UserProfileRepository
+import io.github.arashiyama11.a_larm.infra.gemini.LlmVoiceChatSessionGatewayImpl
 import io.github.arashiyama11.a_larm.infra.repository.LlmApiKeyRepositoryImpl
 import io.github.arashiyama11.a_larm.infra.repository.RoutineRepositoryImpl
 import io.github.arashiyama11.a_larm.infra.repository.UserProfileRepositoryImpl
