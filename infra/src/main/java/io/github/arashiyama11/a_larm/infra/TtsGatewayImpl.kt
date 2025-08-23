@@ -54,15 +54,16 @@ class TtsGatewayImpl @Inject constructor( @ApplicationContext private val contex
             val soundFiles = mutableListOf<File>()
             // 🔸 生成フェーズ（並列）
             launch(dispatcher) {
-                val startTime = System.currentTimeMillis()
+                val preGenerateLimit = 5
+                val shouldBreakEarly = chunks.size > preGenerateLimit
+
                 for ((index, chunk) in chunks.withIndex()) {
                     val file = soundCreate(chunk, speakerId)
                     soundFiles.add(file)
                     playQueue.send(file)
-                    Log.d("Speak", "Generated chunk $index: '${chunk.take(30)}...'")
+                    Log.d("Speak", "Pre-generated chunk $index: '${chunk.take(30)}...'")
 
-                    // 最初の5秒間は先行生成として確保
-                    if (System.currentTimeMillis() - startTime > 5000) break
+                    if (shouldBreakEarly && index + 1 >= preGenerateLimit) break
                 }
 
                 // 残りのチャンクも順次生成
