@@ -9,11 +9,10 @@ import io.github.arashiyama11.a_larm.domain.models.VoiceStyle
 import io.github.arashiyama11.a_larm.infra.dto.SpeakerResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -42,31 +41,51 @@ class TtsGatewayImpl @Inject constructor( @ApplicationContext private val contex
     private val baseUrl = "https://settling-ghastly-chamois.ngrok-free.app"
     private val json = Json { ignoreUnknownKeys = true }
 
-    override suspend fun speak(text: String, voice: VoiceStyle?) = coroutineScope {
-        val resolvedStyle = voice ?: VoiceStyle("四国めたん", "ノーマル")
-        val speakers = fetchSpeakers()
-        val speakerId = resolveSpeakerId(resolvedStyle, speakers)
+    override suspend fun speak(text: String, voice: VoiceStyle?) {
+        coroutineScope {
+            val resolvedStyle = voice ?: VoiceStyle("四国めたん", "ノーマル")
+            val speakers = fetchSpeakers()
+            val speakerId = resolveSpeakerId(resolvedStyle, speakers)
 
-        val chunks = textChunker(text, speakerId)
+            val chunks = textChunker(text, speakerId)
+            val dispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+            val playQueue = Channel<File>(capacity = Channel.UNLIMITED)
 
-        val dispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+            val soundFiles = mutableListOf<File>()
+            // 🔸 生成フェーズ（並列）
+            launch(dispatcher) {
+                val startTime = System.currentTimeMillis()
+                for ((index, chunk) in chunks.withIndex()) {
+                    val file = soundCreate(chunk, speakerId)
+                    soundFiles.add(file)
+                    playQueue.send(file)
+                    Log.d("Speak", "Generated chunk $index: '${chunk.take(30)}...'")
 
-        val playMutex = Mutex()
+                    // 最初の5秒間は先行生成として確保
+                    if (System.currentTimeMillis() - startTime > 5000) break
+                }
 
-        withContext(dispatcher) {
-            chunks.forEachIndexed { index, chunk ->
-                val file = soundCreate(chunk, speakerId)
-                Log.d("Speak", "Generated chunk $index: '${chunk.take(30)}...'")
+                // 残りのチャンクも順次生成
+                for (index in soundFiles.size until chunks.size) {
+                    val file = soundCreate(chunks[index], speakerId)
+                    playQueue.send(file)
+                    Log.d("Speak", "Generated chunk $index: '${chunks[index].take(30)}...'")
+                }
 
-                launch (Dispatchers.IO){
+                playQueue.close()
+            }
+
+            // 🔸 再生フェーズ（逐次）
+            launch(Dispatchers.IO) {
+                var index = 0
+                for (file in playQueue) {
                     try {
-                        playMutex.withLock {
-                            audioPlay(file)
-                            Log.d("Speak", "Played chunk $index")
-                        }
+                        audioPlay(file)
+                        Log.d("Speak", "Played chunk $index")
                     } catch (e: Exception) {
                         Log.e("Speak", "Playback failed for chunk $index", e)
                     }
+                    index++
                 }
             }
         }
