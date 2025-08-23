@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.androidx.room)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -15,6 +16,9 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
+        buildConfigField("String", "APP_VERSION", "\"${project.version}\"")
+        buildConfigField("String", "SERVER_URL", "\"http://192.168.11.6\"")
+        buildConfigField("int", "SERVER_PORT", "3000")
     }
 
     buildTypes {
@@ -37,6 +41,16 @@ android {
     room {
         schemaDirectory("$projectDir/schemas")
     }
+
+    buildFeatures {
+        buildConfig = true
+    }
+}
+
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-Xmulti-dollar-interpolation")
+    }
 }
 
 dependencies {
@@ -50,11 +64,16 @@ dependencies {
     implementation(libs.security.crypto)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.client.logging)
+    implementation(libs.ktor.client.websockets)
+    implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.androidx.datastore.preferences)
-
-    implementation(libs.room.runtime)
     implementation(libs.room.ktx)
+    implementation(libs.okhttp)
+    implementation(libs.room.runtime)
     ksp(libs.room.compiler)
+    implementation(libs.exoPlayer)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

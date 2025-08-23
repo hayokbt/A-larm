@@ -40,6 +40,10 @@ class FakeAlarmRuleRepository @Inject constructor() : AlarmRuleRepository {
 }
 
 class FakePersonaRepository @Inject constructor() : PersonaRepository {
+    override suspend fun list(): List<AssistantPersona> {
+        TODO("Not yet implemented")
+    }
+
     override suspend fun getCurrent(): AssistantPersona {
         TODO("Not yet implemented")
     }
@@ -81,22 +85,23 @@ class FakeDayBriefGateway @Inject constructor() : DayBriefGateway {
         TODO("Not yet implemented")
     }
 }
-
-class FakeAudioOutputGateway @Inject constructor() : AudioOutputGateway {
-    override suspend fun setVolume(level: Int) {
-    }
-
-    override suspend fun ramp(policy: VolumeRampPolicy) {
-    }
-
-    override fun supportedRange(): IntRange {
-        return 1..10
-    }
-
-    override suspend fun play(data: ByteArray) {
-    }
-
-}
+//
+//class FakeAudioOutputGateway @Inject constructor() : AudioOutputGateway {
+//    override suspend fun setVolume(level: Int) {
+//
+//    }
+//
+//    override suspend fun ramp(policy: VolumeRampPolicy) {
+//    }
+//
+//    override fun supportedRange(): IntRange {
+//        return 1..10
+//    }
+//
+//    override suspend fun play(data: ByteArray) {
+//    }
+//
+//}
 
 class FakeSttGateway @Inject constructor() : SttGateway {
     override fun startStreaming(): Flow<SttResult> {

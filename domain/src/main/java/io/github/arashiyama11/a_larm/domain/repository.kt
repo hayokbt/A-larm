@@ -4,7 +4,6 @@ import io.github.arashiyama11.a_larm.domain.models.AlarmId
 import io.github.arashiyama11.a_larm.domain.models.AlarmRule
 import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
-import io.github.arashiyama11.a_larm.domain.models.RoutineGrid
 import io.github.arashiyama11.a_larm.domain.models.RoutineMode
 import io.github.arashiyama11.a_larm.domain.models.SessionId
 import io.github.arashiyama11.a_larm.domain.models.UserProfile
@@ -12,11 +11,15 @@ import kotlinx.coroutines.flow.Flow
 
 
 interface RoutineRepository {
-    suspend fun load(mode: RoutineMode): RoutineGrid
-    suspend fun save(mode: RoutineMode, grid: RoutineGrid)
+    fun load(mode: RoutineMode): Flow<List<AlarmRule>>
+    suspend fun replaceAll(alarmRules: List<AlarmRule>)
+
+    suspend fun delete(alarmId: AlarmId)
+
+    suspend fun upsert(alarmRule: AlarmRule): AlarmId
 
     suspend fun setRoutineMode(mode: RoutineMode)
-    suspend fun getRoutineMode(): Flow<RoutineMode>
+    fun getRoutineMode(): Flow<RoutineMode>
 }
 //
 //interface HabitRepository {
@@ -31,6 +34,7 @@ interface AlarmRuleRepository {
 }
 
 interface PersonaRepository {
+    suspend fun list(): List<AssistantPersona>
     suspend fun getCurrent(): AssistantPersona
     suspend fun setCurrent(persona: AssistantPersona)
 }
