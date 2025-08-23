@@ -1,5 +1,12 @@
 package io.github.arashiyama11.a_larm.infra.repository
 
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.arashiyama11.a_larm.domain.PersonaRepository
 import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.Energy
@@ -8,11 +15,18 @@ import io.github.arashiyama11.a_larm.domain.models.ModelHint
 import io.github.arashiyama11.a_larm.domain.models.PromptStyle
 import io.github.arashiyama11.a_larm.domain.models.Tone
 import io.github.arashiyama11.a_larm.domain.models.VoiceStyle
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
+// DataStore for persona preferences
+private val Context.personaDataStore: DataStore<Preferences> by preferencesDataStore(name = "persona_preferences")
+
 @Singleton
-class PersonaRepositoryImpl @Inject constructor() : PersonaRepository {
+class PersonaRepositoryImpl @Inject constructor(
+    @ApplicationContext private val context: Context
+) : PersonaRepository {
     
     // ハードコーディングされたキャラクター情報
     private val personas = listOf(
@@ -113,18 +127,25 @@ class PersonaRepositoryImpl @Inject constructor() : PersonaRepository {
         )
     )
     
-    // 現在選択されているペルソナのID（実際の実装では永続化する）
-    private var currentPersonaId: String = personas.first().id
+    companion object {
+        private val SELECTED_PERSONA_KEY = stringPreferencesKey("selected_persona_id")
+    }
     
     override suspend fun list(): List<AssistantPersona> {
         return personas
     }
     
     override suspend fun getCurrent(): AssistantPersona {
-        return personas.find { it.id == currentPersonaId } ?: personas.first()
+        val selectedId = context.personaDataStore.data
+            .map { preferences -> preferences[SELECTED_PERSONA_KEY] }
+            .first()
+        
+        return personas.find { it.id == selectedId } ?: personas.first()
     }
     
     override suspend fun setCurrent(persona: AssistantPersona) {
-        currentPersonaId = persona.id
+        context.personaDataStore.edit { preferences ->
+            preferences[SELECTED_PERSONA_KEY] = persona.id
+        }
     }
 }
