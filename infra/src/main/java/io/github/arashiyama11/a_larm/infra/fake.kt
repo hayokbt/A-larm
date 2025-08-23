@@ -40,6 +40,10 @@ class FakeAlarmRuleRepository @Inject constructor() : AlarmRuleRepository {
 }
 
 class FakePersonaRepository @Inject constructor() : PersonaRepository {
+    override suspend fun list(): List<AssistantPersona> {
+        TODO("Not yet implemented")
+    }
+
     override suspend fun getCurrent(): AssistantPersona {
         TODO("Not yet implemented")
     }
