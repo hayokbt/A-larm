@@ -18,10 +18,13 @@ import io.github.arashiyama11.a_larm.domain.LlmChatGateway
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatSessionGateway
 import io.github.arashiyama11.a_larm.domain.PersonaRepository
 import io.github.arashiyama11.a_larm.domain.RoutineRepository
+import io.github.arashiyama11.a_larm.domain.SimpleAlarmAudioGateway
 import io.github.arashiyama11.a_larm.domain.SttGateway
 import io.github.arashiyama11.a_larm.domain.TtsGateway
+import io.github.arashiyama11.a_larm.domain.UserProfileRepository
 import io.github.arashiyama11.a_larm.infra.repository.LlmApiKeyRepositoryImpl
 import io.github.arashiyama11.a_larm.infra.repository.RoutineRepositoryImpl
+import io.github.arashiyama11.a_larm.infra.repository.UserProfileRepositoryImpl
 import io.github.arashiyama11.a_larm.infra.room.RoutineDao
 import io.github.arashiyama11.a_larm.infra.room.RoutineDatabase
 import javax.inject.Singleton
@@ -111,4 +114,16 @@ abstract class ApplicationBindsModule {
     abstract fun bindLlmVoiceChatSessionGateway(
         impl: LlmVoiceChatSessionGatewayImpl
     ): LlmVoiceChatSessionGateway
+
+    @Singleton
+    @Binds
+    abstract fun bindUserProfileRepository(
+        impl: UserProfileRepositoryImpl
+    ): UserProfileRepository
+
+    @Singleton
+    @Binds
+    abstract fun bindSimpleAlarmAudioGateway(
+        impl: SimpleAlarmAudioGatewayImpl
+    ): SimpleAlarmAudioGateway
 }

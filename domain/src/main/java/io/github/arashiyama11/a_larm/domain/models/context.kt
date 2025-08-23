@@ -5,13 +5,29 @@ import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
-enum class RoutineMode { DAILY, WEEKLY }
+enum class Gender {
+    MALE, FEMALE, OTHER
+}
+
+data class UserProfile(
+    val name: String,
+    val gender: Gender
+)
+
+enum class RoutineMode {
+    DAILY, WEEKLY;
+
+    val otherwise
+        get(): RoutineMode = if (this == DAILY) WEEKLY else DAILY
+}
+
 enum class RoutineType { NONE, WAKE, SLEEP, TASK }
 
 data class RoutineEntry(
     val type: RoutineType = RoutineType.NONE,
     val label: String = "",
-    val minute: Int = 0
+    val minute: Int = 0,
+    val id: AlarmId
 )
 
 data class CellKey(val dayIndex: Int, val hour: Int) {
@@ -52,3 +68,4 @@ data class ConversationTurn(
     val text: String,
     val at: Instant = Clock.System.now()
 )
+

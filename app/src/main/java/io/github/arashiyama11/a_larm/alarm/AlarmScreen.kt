@@ -15,6 +15,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -24,17 +26,44 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatState
 import io.github.arashiyama11.a_larm.ui.theme.AlarmTheme
+import kotlinx.coroutines.delay
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
+
 @Composable
-fun AlarmScreen(
+fun AlarmRoute(
     alarmViewModel: AlarmViewModel = hiltViewModel(),
     finish: () -> Unit
 ) {
     val uiState by alarmViewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { alarmViewModel.onStart() }
+    LaunchedEffect(Unit) {
+        alarmViewModel.reduce(AlarmUiAction.Start)
+    }
 
+    when (uiState.phase) {
+        AlarmPhase.FAILED_RESPONSE -> {
+            FallbackAlarmRoute(onFinish = finish)
+        }
+
+        else -> {
+            AlarmScreen(
+                uiState = uiState,
+                onAction = alarmViewModel::reduce,
+                finish = finish
+            )
+        }
+    }
+}
+
+
+@Composable
+fun AlarmScreen(
+    uiState: AlarmUiState,
+    onAction: (AlarmUiAction) -> Unit,
+    finish: () -> Unit
+) {
     Scaffold { contentPadding ->
         Column(
             modifier = Modifier
@@ -44,6 +73,9 @@ fun AlarmScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+
+            CurrentTimeText()
+            Spacer(Modifier.height(16.dp))
             // Title and phase
             Text(
                 text = phaseLabel(uiState.phase),
@@ -111,8 +143,39 @@ private fun chatLabel(state: LlmVoiceChatState): String = when (state) {
     LlmVoiceChatState.ERROR -> "セッションエラー"
 }
 
+
+@Composable
+fun CurrentTimeText(modifier: Modifier = Modifier) {
+    val formatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
+    val now = remember { mutableStateOf(LocalTime.now()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            now.value = LocalTime.now()
+            delay(1_000L)
+        }
+    }
+
+    Text(
+        text = now.value.format(formatter),
+        style = MaterialTheme.typography.displayLarge,
+        modifier = modifier
+    )
+}
+
+
 @Preview
 @Composable
 fun AlarmScreenPreview() {
-    AlarmTheme { AlarmScreen(finish = {}) }
+    AlarmTheme {
+        AlarmScreen(
+            uiState = AlarmUiState(
+                phase = AlarmPhase.RINGING,
+                chatState = LlmVoiceChatState.INITIALIZING,
+                startAt = null
+            ),
+            onAction = {},
+            finish = {}
+        )
+    }
 }

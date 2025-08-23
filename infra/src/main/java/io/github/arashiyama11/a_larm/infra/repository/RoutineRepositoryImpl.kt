@@ -8,11 +8,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.arashiyama11.a_larm.domain.RoutineRepository
-import io.github.arashiyama11.a_larm.domain.models.CellKey
-import io.github.arashiyama11.a_larm.domain.models.RoutineEntry
-import io.github.arashiyama11.a_larm.domain.models.RoutineGrid
+import io.github.arashiyama11.a_larm.domain.models.AlarmId
+import io.github.arashiyama11.a_larm.domain.models.AlarmRule
 import io.github.arashiyama11.a_larm.domain.models.RoutineMode
-import io.github.arashiyama11.a_larm.domain.models.RoutineType
 import io.github.arashiyama11.a_larm.infra.repository.RoutineRepositoryImpl.Companion.STORE_NAME
 import io.github.arashiyama11.a_larm.infra.room.RoutineCellEntity
 import io.github.arashiyama11.a_larm.infra.room.RoutineDao
@@ -31,32 +29,55 @@ class RoutineRepositoryImpl @Inject constructor(
 
     private val prefKey = stringPreferencesKey(PREF_NAME)
 
-    override suspend fun load(mode: RoutineMode): RoutineGrid {
-        return dao.getAll(mode).associate { e ->
-            CellKey(dayIndex = e.dayIndex, hour = e.hour) to
-                    RoutineEntry(type = e.type, label = e.label, minute = e.minute)
+    override fun load(mode: RoutineMode): Flow<List<AlarmRule>> {
+        return dao.getAll(mode).map {
+            it.map {
+                it.toDomain()
+            }
         }
     }
 
-    override suspend fun save(mode: RoutineMode, grid: RoutineGrid) {
-        val entities = grid
-            // NONE は保存しない（スパース化）※必要ならこのフィルタを外してください
-            .filterValues { it.type != RoutineType.NONE }
-            .map { (key, entry) ->
-                require(entry.minute in 0..59) { "minute must be 0..59" }
-                RoutineCellEntity(
-                    mode = mode,
-                    dayIndex = when (mode) {
-                        RoutineMode.DAILY -> 0 // DAILYは曜日に依らないので0固定にしても良い
-                        RoutineMode.WEEKLY -> key.dayIndex
-                    },
-                    hour = key.hour,
-                    type = entry.type,
-                    label = entry.label,
-                    minute = entry.minute
-                )
-            }
-        dao.replaceAll(mode, entities)
+    override suspend fun replaceAll(alarmRules: List<AlarmRule>) {
+        if (alarmRules.isEmpty()) {
+            return
+        }
+        alarmRules.map {
+            RoutineCellEntity(
+                mode = it.mode,
+                dayIndex = when (it.mode) {
+                    RoutineMode.DAILY -> 0
+                    RoutineMode.WEEKLY -> it.dayIndex
+                },
+                hour = it.hour,
+                type = it.type,
+                label = it.label.orEmpty(),
+                minute = it.minute,
+                id = it.id.value
+            )
+        }.let { entries ->
+            dao.replaceAll(alarmRules[0].mode, entries)
+        }
+    }
+
+    override suspend fun delete(alarmId: AlarmId) {
+        dao.deleteById(alarmId.value)
+    }
+
+    override suspend fun upsert(alarmRule: AlarmRule): AlarmId {
+        val entity = RoutineCellEntity(
+            mode = alarmRule.mode,
+            dayIndex = when (alarmRule.mode) {
+                RoutineMode.DAILY -> 0
+                RoutineMode.WEEKLY -> alarmRule.dayIndex
+            },
+            hour = alarmRule.hour,
+            type = alarmRule.type,
+            label = alarmRule.label.orEmpty(),
+            minute = alarmRule.minute,
+            id = alarmRule.id.value
+        )
+        val id = dao.upsert(entity)
+        return AlarmId(id)
     }
 
     override suspend fun setRoutineMode(mode: RoutineMode) {
@@ -65,7 +86,7 @@ class RoutineRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getRoutineMode(): Flow<RoutineMode> {
+    override fun getRoutineMode(): Flow<RoutineMode> {
         return context.dataStore.data
             .map {
                 it[prefKey]?.let { name ->
