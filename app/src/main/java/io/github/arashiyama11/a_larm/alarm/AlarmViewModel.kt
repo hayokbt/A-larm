@@ -33,7 +33,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDateTime
 import javax.inject.Inject
 import javax.inject.Provider
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.ExperimentalTime
 
 // 最初は 音を鳴らして、LLMからの応答を待つ
 enum class AlarmPhase {
@@ -45,7 +47,8 @@ data class AlarmUiState(
     val phase: AlarmPhase = AlarmPhase.RINGING,
     val chatState: LlmVoiceChatState = LlmVoiceChatState.IDLE,
     val startAt: LocalDateTime? = null,
-    val assistantTalk: List<ConversationTurn> = emptyList()
+    val assistantTalk: List<ConversationTurn> = emptyList(),
+    val closeButtonEnabled: Boolean = false,
 )
 
 sealed interface AlarmUiAction {
@@ -77,6 +80,7 @@ class AlarmViewModel @Inject constructor(
 
     private var simpleAlarmJob: Job? = null
 
+    @OptIn(ExperimentalTime::class)
     fun onStart() {
         if (started) return
         started = true
@@ -85,6 +89,29 @@ class AlarmViewModel @Inject constructor(
         llmVoiceChatSessionGateway.onSetupComplete {
             delay(5.seconds)
             llmVoiceChatSessionGateway.sendSystemMessage("ユーザーに起床を促してください")
+        }
+
+        viewModelScope.launch {
+            while (isActive) {
+                val isUserWakeUp = _uiState.value.assistantTalk.filter {
+                    Clock.System.now().epochSeconds - it.at.epochSeconds < 30 && it.role == Role.User
+                }.let {
+                    Log.d("AlarmViewModel", "Recent user talks: $it")
+                    it.all { it.text.isNotBlank() } && it.isNotEmpty()
+                }
+                Log.d("AlarmViewModel", "isUserWakeUp: $isUserWakeUp")
+                if (isUserWakeUp && _uiState.value.phase != AlarmPhase.SUCCESS) {
+                    _uiState.update {
+                        it.copy(
+                            phase = AlarmPhase.SUCCESS,
+                            sendingUserVoice = false,
+                            closeButtonEnabled = true
+                        )
+                    }
+                    break
+                }
+                delay(1000)
+            }
         }
 
         viewModelScope.launch {
@@ -130,7 +157,7 @@ class AlarmViewModel @Inject constructor(
             llmVoiceChatSessionGateway.response.onEach {
                 Log.d("AlarmViewModel", "Response received: $it")
             }.collectWithInactivityTimeout(viewModelScope, 10_000, onInactive = {
-                if (inActiveCount++ > 1) {
+                if (inActiveCount++ > 3) {
                     Log.d("AlarmViewModel", "No response from user, switching to fallback alarm")
                     _uiState.update {
                         it.copy(
@@ -141,7 +168,15 @@ class AlarmViewModel @Inject constructor(
 
                     llmVoiceChatSessionGateway.stop()
                 }
-                llmVoiceChatSessionGateway.sendSystemMessage("ユーザーが${inActiveCount * 10}秒応答していません。さらに起床を促してください")
+                if (inActiveCount == 2) {
+                    // マシンガン
+                    repeat(5) {
+                        llmVoiceChatSessionGateway.sendSystemMessage("ユーザーに起床を促してください")
+                        delay(1000)
+                    }
+                } else {
+                    llmVoiceChatSessionGateway.sendSystemMessage("ユーザーが${inActiveCount * 10}秒応答していません。さらに起床を促してください")
+                }
 
             }) { res ->
                 coroutineScope {

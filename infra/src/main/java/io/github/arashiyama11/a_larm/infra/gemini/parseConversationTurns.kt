@@ -4,6 +4,15 @@ import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.Role
 import kotlin.time.ExperimentalTime
 
+
+fun isValidUserNotEmptyFormat(input: String): Boolean {
+    val re = Regex(
+        pattern = "^\\s*<user>\\s*([\\s\\S]*?\\S)\\s*</user>\\s*<response>[\\s\\S]*?</response>\\s*$",
+        options = setOf(RegexOption.DOT_MATCHES_ALL)
+    )
+    return re.matchEntire(input) != null
+}
+
 @OptIn(ExperimentalTime::class)
 fun parseConversationTurns(input: String): List<ConversationTurn> {
     if (input.isBlank()) return emptyList()
@@ -165,5 +174,5 @@ private fun unescapeHtml(s: String): String {
 }
 
 /** 空白削除ユーティリティ（半角全角・改行・タブを含めて削除） */
-private val WS_REGEX = Regex("[\\s\u3000]+")
+val WS_REGEX = Regex("[\\s\u3000]+")
 private fun String.removeAllWhitespace(): String = this.replace(WS_REGEX, "")
