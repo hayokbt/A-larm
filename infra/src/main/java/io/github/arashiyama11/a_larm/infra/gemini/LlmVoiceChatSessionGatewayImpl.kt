@@ -12,13 +12,14 @@ import androidx.annotation.RequiresPermission
 import io.github.arashiyama11.a_larm.domain.LlmApiKeyRepository
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatSessionGateway
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatState
+import io.github.arashiyama11.a_larm.domain.UserProfileRepository
 import io.github.arashiyama11.a_larm.domain.VoiceChatResponse
 import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.DayBrief
-import io.github.arashiyama11.a_larm.domain.models.Energy
+import io.github.arashiyama11.a_larm.domain.models.Gender
 import io.github.arashiyama11.a_larm.domain.models.Role
-import io.github.arashiyama11.a_larm.domain.models.Tone
+import io.github.arashiyama11.a_larm.domain.models.UserProfile
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -49,6 +51,7 @@ import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.math.max
 import kotlin.math.sqrt
+import kotlin.time.ExperimentalTime
 
 @Serializable
 data class GeminiLiveMessage(
@@ -66,6 +69,8 @@ data class GeminiLiveSetup(
     val model: String = "models/gemini-2.5-flash-preview-native-audio-dialog",//"models/gemini-2.0-flash-exp",
     val generationConfig: GeminiGenerationConfig = GeminiGenerationConfig(),
     val systemInstruction: GeminiSystemInstruction? = null,
+    val inputAudioTranscription: JsonObject? = JsonObject(mapOf()),
+    val outputAudioTranscription: JsonObject? = null
     //val tools: List<JsonElement> = emptyList()
 )
 
@@ -104,7 +109,8 @@ data class GeminiPart(
 )
 
 class LlmVoiceChatSessionGatewayImpl @Inject constructor(
-    private val llmApiKeyRepository: LlmApiKeyRepository
+    private val llmApiKeyRepository: LlmApiKeyRepository,
+    private val userProfileRepository: UserProfileRepository
 ) : LlmVoiceChatSessionGateway {
 
     companion object {
@@ -248,7 +254,9 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
                 responseAudio = false,
                 persona = persona,
                 brief = brief,
-                history = history
+                history = history,
+                userProfile = userProfileRepository.getProfile().firstOrNull()
+                    ?: UserProfile(name = "ユーザー", Gender.OTHER)
             )
 
             val setupSuccess = sendMessage(json.encodeToString(setupMessage))
@@ -545,13 +553,15 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
 
     private val processingResponseText = StringBuilder()
 
+    private val processingTranscriptionText = StringBuilder()
+
     var setupHandler: (suspend LlmVoiceChatSessionGateway.() -> Unit)? = null
     override fun onSetupComplete(action: suspend LlmVoiceChatSessionGateway.() -> Unit) {
         setupHandler = action
     }
 
-    @OptIn(ExperimentalEncodingApi::class)
-    private suspend fun processGeminiMessage(message: JsonObject) {
+    @OptIn(ExperimentalEncodingApi::class, ExperimentalTime::class)
+    private suspend fun CoroutineScope.processGeminiMessage(message: JsonObject) {
         try {
             Log.d(TAG, "Processing message: $message")
 
@@ -559,13 +569,25 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
             if (message.containsKey("setupComplete")) {
                 Log.d(TAG, "Setup completed")
                 _chatState.value = LlmVoiceChatState.ACTIVE
-                setupHandler?.invoke(this)
+                setupHandler?.invoke(this@LlmVoiceChatSessionGatewayImpl)
                 return
             }
 
             // サーバーコンテンツの処理
             val serverContent = message["serverContent"]?.jsonObject
             if (serverContent != null) {
+
+                val inputTranscription = serverContent["inputTranscription"]?.jsonObject
+                if (inputTranscription != null) {
+                    val text = inputTranscription["text"]?.jsonPrimitive
+                    if (text != null) {
+                        Log.d("TAG", "Input transaction text: ${text.content}")
+                        processingTranscriptionText.append(text.content)
+                    }
+                    Log.d(TAG, "Input transaction acknowledged")
+                }
+
+
                 val modelTurn = serverContent["modelTurn"]?.jsonObject
                 if (modelTurn != null) {
                     _chatState.value = LlmVoiceChatState.ACTIVE
@@ -590,14 +612,36 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
                 val turnComplete = serverContent["turnComplete"]
                 if (turnComplete != null) {
                     if (processingResponseText.isNotEmpty()) {
+                        val conservation = parseConversationTurns(
+                            processingResponseText.toString()
+                        ).let { cons ->
+                            val blankUserText =
+                                cons.firstOrNull { it.role == Role.User && it.text.isBlank() }
+                            if (blankUserText != null) {
+                                val transcript = processingTranscriptionText.toString()
+                                if (transcript.contains("<noise>")) {
+                                    cons
+                                } else {
+//                                    launch {
+//                                        sendSystemMessage("レスポンスが形式に従っていません。<user>タグの中身が空白です。ユーザーの発言を<user></user>タグで囲み、systemメッセージに対する応答なら<user>system</user>としてください。")
+//                                    }
+                                    listOf(
+                                        blankUserText.copy(
+                                            text = transcript.replace(WS_REGEX, "")
+                                        )
+                                    ) + cons.filter { it.role == Role.Assistant }
+                                }
+                            } else {
+                                cons
+                            }
+                        }
 
                         _response.emit(
                             VoiceChatResponse.Text(
-                                parseConversationTurns(
-                                    processingResponseText.toString()
-                                )
+                                conservation
                             )
                         )
+                        processingTranscriptionText.clear()
                         processingResponseText.clear()
                     } else if (processingVoiceResponseText.isNotEmpty()) {
                         //base64してから
@@ -758,10 +802,11 @@ private fun buildSetupRequest(
     responseAudio: Boolean = false,
     persona: AssistantPersona,
     brief: DayBrief,
+    userProfile: UserProfile,
     history: List<ConversationTurn>
 ): GeminiLiveSetupRequest {
     if (responseAudio) {
-        GeminiLiveSetupRequest(
+        return GeminiLiveSetupRequest(
             setup = GeminiLiveSetup(
                 model = "models/gemini-2.5-flash-preview-native-audio-dialog",
                 generationConfig = GeminiGenerationConfig(
@@ -775,7 +820,7 @@ private fun buildSetupRequest(
                     )
                 ),
                 systemInstruction = buildSystemInstruction(
-                    persona, brief, history
+                    persona, brief, userProfile, history,
                 )
             )
         )
@@ -783,7 +828,7 @@ private fun buildSetupRequest(
     return GeminiLiveSetupRequest(
         setup = GeminiLiveSetup(
             model = "models/gemini-2.0-flash-exp",
-            systemInstruction = buildSystemInstruction(persona, brief, history),
+            systemInstruction = buildSystemInstruction(persona, brief, userProfile, history),
             generationConfig = GeminiGenerationConfig(
                 response_modalities = listOf("TEXT"),
             )
@@ -802,119 +847,6 @@ private fun buildAudioMessage(audioData: ByteArray): String {
         })
     }.toString()
 }
-
-
-private fun buildSystemInstruction(
-    persona: AssistantPersona,
-    brief: DayBrief,
-    history: List<ConversationTurn>
-): GeminiSystemInstruction {
-    val promptBuilder = StringBuilder()
-    promptBuilder.append(
-        """
-        あなたは構造化レスポンスを厳格に出力するシステムです。以下のルールを**必ず**守ってください。
-
-        1) 出力は**必ず**次の2つのタグだけで構成してください（順序も厳守）：
-           <user>...</user><response>...</response>
-
-        2) 出力は**それ以外のテキストを含んではいけません**。説明、注釈、余分な改行、メタ情報、一切禁止です。
-
-        3) タグ内の内容は生テキスト（ユーザー発言やアシスタント返答）です。HTML特殊文字は必要に応じてエスケープしてください（例: `&lt;` `&gt;` `&amp;`）。
-
-        4) もしタスクを実行できない場合でも、フォーマットだけは守ってください。例:
-           <user></user><response></response>
-
-        5) 応答は短くてもよいが、タグ構造は必須。余計な空白やボディ外の文字は出力しないこと。
-
-        例（望ましい出力）:
-        <user>今日は天気どう？</user><response>今日は晴れです。</response>
-
-        例（許可しない出力）:
-        - "OK. <user>...</user><response>...</response>" （先頭にOKを付けるのは禁止）
-        - JSON や追加説明を付与することは禁止
-
-        出力はこれだけ（タグのみ）。理解したら、以降のすべての応答でこのフォーマットに従ってください。
-    """.trimIndent()
-    )
-
-    promptBuilder.append("""また入力の、<system></system> タグの中身はユーザーの入力でなくシステムの指示です。systemタグの内容に従い、この場合は<user></user><response>あなたのレスポンス</response>のようにuserタグを空にして出力してください。""")
-
-    // ペルソナ情報
-    promptBuilder.append("あなたは${persona.displayName}として振る舞ってください。")
-    persona.backstory?.let {
-        promptBuilder.append("\n背景: $it")
-    }
-
-    // スタイル情報
-    val style = persona.style
-    promptBuilder.append(
-        "\n話し方: ${getToneDescription(style.tone)}、エネルギー: ${
-            getEnergyDescription(
-                style.energy
-            )
-        }"
-    )
-
-    if (style.questionFirst) {
-        promptBuilder.append("\nユーザーを起こすために、最初は短い質問から始めてください。")
-    }
-
-    // 日付・予定情報
-    brief.date?.let {
-        promptBuilder.append("\n今日は${it.toLocalDate()}です。")
-    }
-
-    if (brief.calendar.isNotEmpty()) {
-        promptBuilder.append("\n今日の予定:")
-        brief.calendar.forEach { event ->
-            promptBuilder.append("\n- ${event.start.toLocalTime()}: ${event.title}")
-        }
-    }
-
-    // 天気情報
-    brief.weather?.let { weather ->
-        promptBuilder.append("\n天気: ${weather.summary}")
-        weather.tempC?.let { temp ->
-            promptBuilder.append("、気温: ${temp}度")
-        }
-    }
-
-    // 会話履歴
-    if (history.isNotEmpty()) {
-        promptBuilder.append("\n\n過去の会話:")
-        history.takeLast(5).forEach { turn ->
-            val roleText = when (turn.role) {
-                Role.User -> "ユーザー"
-                Role.Assistant -> "アシスタント"
-                Role.System -> "システム"
-            }
-            promptBuilder.append("\n$roleText: ${turn.text}")
-        }
-    }
-
-    promptBuilder.append("\n\nユーザーを優しく起こしてください。短い音声で応答してください。")
-
-    return GeminiSystemInstruction(
-        parts = listOf(GeminiPart(text = promptBuilder.toString()))
-    )
-}
-
-
-private fun getToneDescription(tone: Tone): String =
-    when (tone) {
-        Tone.Friendly -> "親しみやすい"
-        Tone.Strict -> "厳格"
-        Tone.Cheerful -> "明るい"
-        Tone.Deadpan -> "無表情"
-    }
-
-private fun getEnergyDescription(energy: Energy): String =
-    when (energy) {
-        Energy.Low -> "落ち着いた"
-        Energy.Medium -> "普通"
-        Energy.High -> "活発"
-    }
-
 
 private fun extractTextFromParts(parts: JsonElement): String {
     return try {

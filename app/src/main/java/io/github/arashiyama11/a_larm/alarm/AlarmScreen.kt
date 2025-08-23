@@ -1,5 +1,6 @@
 package io.github.arashiyama11.a_larm.alarm
 
+import android.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,8 +20,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonElevation
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -137,9 +141,13 @@ fun AlarmScreen(
                 Spacer(Modifier.height(16.dp))
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = { finish() }) { Text("停止") }
-            }
+            OutlinedButton(
+                onClick = { finish() },
+                enabled = uiState.closeButtonEnabled,
+                modifier = Modifier,
+                contentPadding = PaddingValues(12.dp),
+                elevation = ButtonDefaults.buttonElevation()
+            ) { Text("停止", modifier = Modifier, style = MaterialTheme.typography.displaySmall) }
         }
     }
 }

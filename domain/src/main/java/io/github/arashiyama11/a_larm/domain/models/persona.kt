@@ -15,8 +15,9 @@ data class PromptStyle(
     val tone: Tone = Tone.Friendly,
     val energy: Energy = Energy.Medium,
     val questionFirst: Boolean = true,
-    val systemPromptTemplate: String? = null // e.g. "{backstory}\n今日の予定: {agenda}\nユーザーを起こす短い質問から開始"
+    val systemPromptTemplate: String // e.g. "{backstory}\n今日の予定: {agenda}\nユーザーを起こす短い質問から開始"
 )
+
 enum class Tone { Friendly, Strict, Cheerful, Deadpan }
 enum class Energy { Low, Medium, High }
 
