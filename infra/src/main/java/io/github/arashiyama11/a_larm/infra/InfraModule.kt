@@ -22,6 +22,7 @@ import io.github.arashiyama11.a_larm.domain.SimpleAlarmAudioGateway
 import io.github.arashiyama11.a_larm.domain.SttGateway
 import io.github.arashiyama11.a_larm.domain.TtsGateway
 import io.github.arashiyama11.a_larm.domain.UserProfileRepository
+import io.github.arashiyama11.a_larm.infra.gemini.LlmVoiceChatSessionGatewayImpl
 import io.github.arashiyama11.a_larm.infra.repository.LlmApiKeyRepositoryImpl
 import io.github.arashiyama11.a_larm.infra.repository.PersonaRepositoryImpl
 import io.github.arashiyama11.a_larm.infra.repository.RoutineRepositoryImpl
@@ -36,7 +37,9 @@ object DbModule {
     @Provides
     @Singleton
     fun provideDb(@ApplicationContext ctx: Context): RoutineDatabase =
-        Room.databaseBuilder(ctx, RoutineDatabase::class.java, "routine.db").build()
+        Room.databaseBuilder(ctx, RoutineDatabase::class.java, "routine.db")
+            .fallbackToDestructiveMigration()
+            .build()
 
     @Provides
     fun provideRoutineDao(db: RoutineDatabase): RoutineDao = db.routineDao()
@@ -84,7 +87,7 @@ abstract class ApplicationBindsModule {
     @Singleton
     @Binds
     abstract fun bindAudioOutputGateway(
-        impl: FakeAudioOutputGateway
+        impl: AudioOutputGatewayImpl
     ): AudioOutputGateway
 
     @Singleton

@@ -52,7 +52,7 @@ class HomeViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(HomeUiState())
     var uiState = _uiState.asStateFlow()
-    
+
     private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
     init {
@@ -89,7 +89,7 @@ class HomeViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             try {
                 val personas = personaRepository.list()
-                _uiState.update { 
+                _uiState.update {
                     it.copy(
                         availablePersonas = personas,
                         isLoading = false
@@ -133,7 +133,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun onSetCustomAlarmTime(time: LocalTime) {
-        _uiState.update { 
+        _uiState.update {
             it.copy(
                 customAlarmTime = time,
                 nextAlarm = time.format(timeFormatter)
@@ -152,7 +152,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun onResetToDefaultAlarm() {
-        _uiState.update { 
+        _uiState.update {
             it.copy(
                 customAlarmTime = null,
                 isOneTimeAlarm = false
@@ -176,7 +176,7 @@ class HomeViewModel @Inject constructor(
 
 
         val currentPersona = uiState.value.selectedPersona ?: return
-        
+
         llmChatGateway.streamReply(currentPersona, brief, uiState.value.history)
             .onEach { chunk ->
                 // チャンクを受け取ったら、履歴に追加

@@ -175,9 +175,9 @@ private fun PersonaSelectionSection(
                     style = MaterialTheme.typography.titleMedium
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
+
             if (isLoading) {
                 Box(
                     modifier = Modifier.fillMaxWidth(),
@@ -250,9 +250,9 @@ private fun EnhancedPersonaCard(
                     .clip(RoundedCornerShape(12.dp)),
                 contentScale = ContentScale.Crop
             )
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             // キャラクター名
             Text(
                 text = persona.displayName,
@@ -261,9 +261,9 @@ private fun EnhancedPersonaCard(
                 textAlign = TextAlign.Center,
                 maxLines = 2
             )
-            
+
             Spacer(modifier = Modifier.height(4.dp))
-            
+
             // キャラクターの特徴
             Text(
                 text = getCharacterDescription(persona.id),
@@ -320,9 +320,9 @@ private fun AlarmCustomSection(
                     style = MaterialTheme.typography.titleMedium
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
+
             // カスタム時間設定
             Button(
                 onClick = onShowTimePicker,
@@ -330,15 +330,21 @@ private fun AlarmCustomSection(
             ) {
                 Text(
                     text = if (customTime != null) {
-                        "カスタム時間: ${String.format("%02d:%02d", customTime.hour, customTime.minute)}"
+                        "カスタム時間: ${
+                            String.format(
+                                "%02d:%02d",
+                                customTime.hour,
+                                customTime.minute
+                            )
+                        }"
                     } else {
                         "カスタム時間を設定"
                     }
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             // 一回限りのアラーム設定
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -351,9 +357,9 @@ private fun AlarmCustomSection(
                     onCheckedChange = onToggleOneTime
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             // アクションボタン
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -370,7 +376,7 @@ private fun AlarmCustomSection(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("スキップ")
                 }
-                
+
                 if (customTime != null) {
                     OutlinedButton(
                         onClick = onReset,
@@ -391,7 +397,7 @@ private fun TimePickerDialog(
     onDismiss: () -> Unit
 ) {
     val timePickerState = rememberTimePickerState()
-    
+
     // 簡易的なダイアログ実装（実際の実装ではAlertDialogなどを使用）
     Card(
         modifier = Modifier
@@ -405,15 +411,15 @@ private fun TimePickerDialog(
                 text = "アラーム時刻を選択",
                 style = MaterialTheme.typography.titleMedium
             )
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             TimePicker(
                 state = timePickerState
             )
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End

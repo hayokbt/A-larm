@@ -16,6 +16,9 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
+        buildConfigField("String", "APP_VERSION", "\"${project.version}\"")
+        buildConfigField("String", "SERVER_URL", "\"http://192.168.11.6\"")
+        buildConfigField("int", "SERVER_PORT", "3000")
     }
 
     buildTypes {
@@ -38,6 +41,10 @@ android {
     room {
         schemaDirectory("$projectDir/schemas")
     }
+
+    buildFeatures {
+        buildConfig = true
+    }
 }
 
 dependencies {
@@ -51,14 +58,16 @@ dependencies {
     implementation(libs.security.crypto)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.client.logging)
+    implementation(libs.ktor.client.websockets)
+    implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.androidx.datastore.preferences)
-
-    implementation(libs.okhttp)
-    implementation(libs.kotlinx.serialization.json)
-
-    implementation(libs.room.runtime)
     implementation(libs.room.ktx)
+    implementation(libs.okhttp)
+    implementation(libs.room.runtime)
     ksp(libs.room.compiler)
+    implementation(libs.exoPlayer)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
