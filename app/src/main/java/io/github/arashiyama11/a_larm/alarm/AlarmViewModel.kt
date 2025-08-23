@@ -7,13 +7,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.arashiyama11.a_larm.domain.AudioOutputGateway
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatSessionGateway
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatState
+import io.github.arashiyama11.a_larm.domain.PersonaRepository
 import io.github.arashiyama11.a_larm.domain.SimpleAlarmAudioGateway
 import io.github.arashiyama11.a_larm.domain.TtsGateway
 import io.github.arashiyama11.a_larm.domain.VoiceChatResponse
-import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.DayBrief
-import io.github.arashiyama11.a_larm.domain.models.PromptStyle
 import io.github.arashiyama11.a_larm.domain.models.Role
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -61,19 +60,13 @@ class AlarmViewModel @Inject constructor(
     private val ttsGateway: TtsGateway,
     private val llmVoiceChatSessionGatewayProvider: Provider<LlmVoiceChatSessionGateway>,
     private val audioOutputGateway: AudioOutputGateway,
-    private val simpleAlarmAudioGateway: SimpleAlarmAudioGateway
+    private val simpleAlarmAudioGateway: SimpleAlarmAudioGateway,
+    private val personaRepository: PersonaRepository
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AlarmUiState())
     lateinit var llmVoiceChatSessionGateway: LlmVoiceChatSessionGateway
     val uiState = _uiState.asStateFlow()
     private var started: Boolean = false
-
-    private val persona = AssistantPersona(
-        id = "id",
-        displayName = "Persona Name",
-        style = PromptStyle()
-    )
-
     private val brief = DayBrief(
         date = LocalDateTime.now()
     )
@@ -137,6 +130,8 @@ class AlarmViewModel @Inject constructor(
         }
 
         viewModelScope.launch(Dispatchers.IO) {
+            val persona = personaRepository.getCurrent()
+
             llmVoiceChatSessionGateway.initialize(persona, brief, emptyList())
         }
         addCloseable {

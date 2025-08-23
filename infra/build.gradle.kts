@@ -47,6 +47,12 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-Xmulti-dollar-interpolation")
+    }
+}
+
 dependencies {
 
     implementation(libs.androidx.core.ktx)

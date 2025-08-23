@@ -12,13 +12,14 @@ import androidx.annotation.RequiresPermission
 import io.github.arashiyama11.a_larm.domain.LlmApiKeyRepository
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatSessionGateway
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatState
+import io.github.arashiyama11.a_larm.domain.UserProfileRepository
 import io.github.arashiyama11.a_larm.domain.VoiceChatResponse
 import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.DayBrief
-import io.github.arashiyama11.a_larm.domain.models.Energy
+import io.github.arashiyama11.a_larm.domain.models.Gender
 import io.github.arashiyama11.a_larm.domain.models.Role
-import io.github.arashiyama11.a_larm.domain.models.Tone
+import io.github.arashiyama11.a_larm.domain.models.UserProfile
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -107,7 +109,8 @@ data class GeminiPart(
 )
 
 class LlmVoiceChatSessionGatewayImpl @Inject constructor(
-    private val llmApiKeyRepository: LlmApiKeyRepository
+    private val llmApiKeyRepository: LlmApiKeyRepository,
+    private val userProfileRepository: UserProfileRepository
 ) : LlmVoiceChatSessionGateway {
 
     companion object {
@@ -251,7 +254,9 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
                 responseAudio = false,
                 persona = persona,
                 brief = brief,
-                history = history
+                history = history,
+                userProfile = userProfileRepository.getProfile().firstOrNull()
+                    ?: UserProfile(name = "ユーザー", Gender.OTHER)
             )
 
             val setupSuccess = sendMessage(json.encodeToString(setupMessage))
@@ -797,6 +802,7 @@ private fun buildSetupRequest(
     responseAudio: Boolean = false,
     persona: AssistantPersona,
     brief: DayBrief,
+    userProfile: UserProfile,
     history: List<ConversationTurn>
 ): GeminiLiveSetupRequest {
     if (responseAudio) {
@@ -814,7 +820,7 @@ private fun buildSetupRequest(
                     )
                 ),
                 systemInstruction = buildSystemInstruction(
-                    persona, brief, history
+                    persona, brief, userProfile, history,
                 )
             )
         )
@@ -822,7 +828,7 @@ private fun buildSetupRequest(
     return GeminiLiveSetupRequest(
         setup = GeminiLiveSetup(
             model = "models/gemini-2.0-flash-exp",
-            systemInstruction = buildSystemInstruction(persona, brief, history),
+            systemInstruction = buildSystemInstruction(persona, brief, userProfile, history),
             generationConfig = GeminiGenerationConfig(
                 response_modalities = listOf("TEXT"),
             )

@@ -4,7 +4,6 @@ import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.DayBrief
 import io.github.arashiyama11.a_larm.domain.models.Energy
-import io.github.arashiyama11.a_larm.domain.models.Role
 import io.github.arashiyama11.a_larm.domain.models.Tone
 import io.github.arashiyama11.a_larm.domain.models.UserProfile
 
@@ -25,7 +24,7 @@ fun buildSystemInstruction(
 
         2) 出力は**それ以外のテキストを含んではいけません**。説明、注釈、余分な改行、メタ情報、一切禁止です。
 
-        3) タグ内の内容は生テキスト（ユーザー発言やアシスタント返答）です。HTML特殊文字は必要に応じてエスケープしてください（例: `&lt;` `&gt;` `&amp;`）。
+        3) タグ内の内容は生テキスト（ユーザー発言やアシスタント返答）です。合成音声による自動読み上げがされるため、タグの内容に句読点や!?以外の記号は使わないでください。
 
         4) もしタスクを実行できない場合でも、フォーマットだけは守ってください。例:
            <user></user><response></response>
@@ -47,63 +46,15 @@ fun buildSystemInstruction(
 
     promptBuilder.append("\n--- \n")
     promptBuilder.append(
-        """
-        あなたは${persona.displayName}として振る舞ってください。
-        
-        """.trimIndent()
+        persona.style.systemPromptTemplate.fillTemplate(
+            name = userProfile.name,
+            gender = userProfile.gender.toString(),
+            time = brief.date?.toLocalTime()?.toString() ?: "不明",
+            weather = brief.weather?.summary ?: "不明",
+            schedule = "",
+            response = history.joinToString(" ")
+        )
     )
-    persona.backstory?.let {
-        promptBuilder.append("\n背景: $it")
-    }
-
-    // スタイル情報
-    val style = persona.style
-    promptBuilder.append(
-        "\n話し方: ${getToneDescription(style.tone)}、エネルギー: ${
-            getEnergyDescription(
-                style.energy
-            )
-        }"
-    )
-
-    if (style.questionFirst) {
-        promptBuilder.append("\nユーザーを起こすために、最初は短い質問から始めてください。")
-    }
-
-    // 日付・予定情報
-    brief.date?.let {
-        promptBuilder.append("\n今日は${it.toLocalDate()}です。")
-    }
-
-    if (brief.calendar.isNotEmpty()) {
-        promptBuilder.append("\n今日の予定:")
-        brief.calendar.forEach { event ->
-            promptBuilder.append("\n- ${event.start.toLocalTime()}: ${event.title}")
-        }
-    }
-
-    // 天気情報
-    brief.weather?.let { weather ->
-        promptBuilder.append("\n天気: ${weather.summary}")
-        weather.tempC?.let { temp ->
-            promptBuilder.append("、気温: ${temp}度")
-        }
-    }
-
-    // 会話履歴
-    if (history.isNotEmpty()) {
-        promptBuilder.append("\n\n過去の会話:")
-        history.takeLast(5).forEach { turn ->
-            val roleText = when (turn.role) {
-                Role.User -> "ユーザー"
-                Role.Assistant -> "アシスタント"
-                Role.System -> "システム"
-            }
-            promptBuilder.append("\n$roleText: ${turn.text}")
-        }
-    }
-
-    promptBuilder.append("\n\nユーザーを優しく起こしてください。短い音声で応答してください。")
 
     return GeminiSystemInstruction(
         parts = listOf(GeminiPart(text = promptBuilder.toString()))
@@ -125,4 +76,32 @@ private fun getEnergyDescription(energy: Energy): String =
         Energy.Medium -> "普通"
         Energy.High -> "活発"
     }
+
+fun String.fillTemplate(
+    name: String,
+    gender: String,
+    time: String,
+    weather: String,
+    schedule: String,
+    response: String
+): String {
+    val replacements = mapOf(
+        "name" to name,
+        "gender" to gender,
+        "time" to time,
+        "weather" to weather,
+        "schedule" to schedule,
+        "response" to response
+    )
+
+    // ${キー} を検出してマップから置換。マップにないキーはそのまま残す。
+    return regex.replace(this) { matchResult ->
+        val key = matchResult.groupValues[1]
+        replacements[key] ?: matchResult.value
+    }
+}
+
+private val regex = Regex("""\$\{([^}]+)\}""")
+
+
 
