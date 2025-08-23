@@ -16,15 +16,17 @@ import androidx.datastore.preferences.preferencesDataStore
 import io.github.arashiyama11.a_larm.infra.repository.LlmApiKeyRepositoryImpl.Companion.STORE_NAME
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-import kotlin.io.encoding.Base64
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = STORE_NAME)
 
+@OptIn(ExperimentalEncodingApi::class)
 class LlmApiKeyRepositoryImpl @Inject constructor(
     @param:ApplicationContext private val context: Context
 ) : LlmApiKeyRepository {
