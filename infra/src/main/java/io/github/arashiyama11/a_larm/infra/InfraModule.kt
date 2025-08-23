@@ -23,6 +23,7 @@ import io.github.arashiyama11.a_larm.domain.SttGateway
 import io.github.arashiyama11.a_larm.domain.TtsGateway
 import io.github.arashiyama11.a_larm.domain.UserProfileRepository
 import io.github.arashiyama11.a_larm.infra.repository.LlmApiKeyRepositoryImpl
+import io.github.arashiyama11.a_larm.infra.repository.PersonaRepositoryImpl
 import io.github.arashiyama11.a_larm.infra.repository.RoutineRepositoryImpl
 import io.github.arashiyama11.a_larm.infra.repository.UserProfileRepositoryImpl
 import io.github.arashiyama11.a_larm.infra.room.RoutineDao
@@ -59,7 +60,7 @@ abstract class ApplicationBindsModule {
     @Singleton
     @Binds
     abstract fun bindPersonaRepository(
-        impl: FakePersonaRepository
+        impl: PersonaRepositoryImpl
     ): PersonaRepository
 
     @Singleton
