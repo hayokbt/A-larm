@@ -2,38 +2,18 @@ package io.github.arashiyama11.a_larm.infra
 
 import android.content.Context
 import android.media.MediaPlayer
-import android.net.Uri
 import android.util.Log
-import androidx.core.net.toUri
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C.AUDIO_CONTENT_TYPE_SPEECH
-import androidx.media3.common.C.CONTENT_TYPE_SPEECH
-import androidx.media3.common.C.USAGE_MEDIA
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.arashiyama11.a_larm.domain.TtsGateway
 import io.github.arashiyama11.a_larm.domain.models.VoiceStyle
-import io.github.arashiyama11.a_larm.infra.dto.SpeakRequest
 import io.github.arashiyama11.a_larm.infra.dto.SpeakerResponse
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.client.statement.bodyAsBytes
-import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.contentType
-import io.ktor.http.isSuccess
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -43,133 +23,201 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.io.IOException
 import java.net.URLEncoder
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-
-class TtsGatewayImpl @Inject constructor(@ApplicationContext private val context: Context) :
-    TtsGateway {
-    private val client = HttpClient(CIO) {
-        install(HttpTimeout) {
-            requestTimeoutMillis = 30_000 // 30 seconds
-            connectTimeoutMillis = 30_000 // 10 seconds
-            socketTimeoutMillis = 30_000 // 10 seconds
-        }
-
-        install(ContentNegotiation) {
-            json(Json {
-                ignoreUnknownKeys = true
-                isLenient = true
-                encodeDefaults = true
-            })
-        }
-    }
-    private val baseUrl = "${BuildConfig.SERVER_URL}:${BuildConfig.SERVER_PORT}"
+class TtsGatewayImpl @Inject constructor( @ApplicationContext private val context: Context ) : TtsGateway {
+    private val client = OkHttpClient.Builder()
+        .callTimeout(30, TimeUnit.SECONDS)       // 全体の処理時間の上限
+        .connectTimeout(5, TimeUnit.SECONDS)     // 接続確立までの時間
+        .readTimeout(30, TimeUnit.SECONDS)       // サーバーからの応答待ち時間
+        .writeTimeout(30, TimeUnit.SECONDS)      // リクエスト送信の猶予時間
+        .build()
+    private val baseUrl = "https://settling-ghastly-chamois.ngrok-free.app"
     private val json = Json { ignoreUnknownKeys = true }
 
-    private val player: ExoPlayer by lazy {
-        ExoPlayer.Builder(context).build().apply {
-            // 音声用のAudioAttributes（任意）
-            setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(USAGE_MEDIA)
-                    .setContentType(AUDIO_CONTENT_TYPE_SPEECH)
-                    .build(),
-                /* handleAudioFocus = */ true
-            )
+    override suspend fun speak(text: String, voice: VoiceStyle?) {
+        coroutineScope {
+            val resolvedStyle = voice ?: VoiceStyle("四国めたん", "ノーマル")
+            val speakers = fetchSpeakers()
+            val speakerId = resolveSpeakerId(resolvedStyle, speakers)
+
+            val chunks = textChunker(text, speakerId)
+            val dispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+            val playQueue = Channel<File>(capacity = Channel.UNLIMITED)
+
+            val soundFiles = mutableListOf<File>()
+            // 🔸 生成フェーズ（並列）
+            launch(dispatcher) {
+                val preGenerateLimit = 5
+                val shouldBreakEarly = chunks.size > preGenerateLimit
+
+                for ((index, chunk) in chunks.withIndex()) {
+                    val file = soundCreate(chunk, speakerId)
+                    soundFiles.add(file)
+                    playQueue.send(file)
+                    Log.d("Speak", "Pre-generated chunk $index: '${chunk.take(30)}...'")
+
+                    if (shouldBreakEarly && index + 1 >= preGenerateLimit) break
+                }
+
+                // 残りのチャンクも順次生成
+                for (index in soundFiles.size until chunks.size) {
+                    val file = soundCreate(chunks[index], speakerId)
+                    playQueue.send(file)
+                    Log.d("Speak", "Generated chunk $index: '${chunks[index].take(30)}...'")
+                }
+
+                playQueue.close()
+            }
+
+            // 🔸 再生フェーズ（逐次）
+            launch(Dispatchers.IO) {
+                var index = 0
+                for (file in playQueue) {
+                    try {
+                        audioPlay(file)
+                        Log.d("Speak", "Played chunk $index")
+                    } catch (e: Exception) {
+                        Log.e("Speak", "Playback failed for chunk $index", e)
+                    }
+                    index++
+                }
+            }
         }
     }
 
-    override suspend fun speak(text: String, voiceStyle: VoiceStyle?): Unit =
-        withContext(Dispatchers.IO) {
-            // 1) fetch
-            val response = client.post("$baseUrl/api/prompt/1") {
-                contentType(io.ktor.http.ContentType.Application.Json)
-                setBody(mapOf("text" to text))
-            }
+    suspend fun soundCreate(text: String, speakerId: Int): File = withContext(Dispatchers.IO) {
 
-            if (!response.status.isSuccess()) {
-                // ログは省略
-                return@withContext
-            }
 
-            // 2) write to file
-            val outputFile = File(context.cacheDir, "output.wav")
-            outputFile.outputStream().use { os ->
-                os.write(response.bodyAsBytes())
-                os.flush()
-            }
+        Log.d("TtsGatewayImpl", "SoundCreate text: '$text', speakerId: $speakerId")
 
-            // 3) play on Main
-            withContext(Dispatchers.Main) {
-                // safety checks
-                if (!outputFile.exists() || outputFile.length() == 0L || !outputFile.canRead()) {
-                    // ログ出すなど
-                    return@withContext
-                }
+        val queryUrl = "$baseUrl/audio_query?text=${URLEncoder.encode(text, "UTF-8")}&speaker=$speakerId"
 
-                suspendCancellableCoroutine<Unit> { cont ->
-                    val uri: Uri = outputFile.toUri()
-                    val mediaItem = MediaItem.fromUri(uri)
+        val queryResponse = client.newCall(
+            Request.Builder()
+                .url(queryUrl)
+                .post("{}".toRequestBody("application/json".toMediaType())) // 空のJSONボディ
+                .header("User-Agent", "okhttp")
+                .build()
+        ).execute()
 
-                    // 前の再生が残ってたら止めてクリア
-                    try {
-                        if (player.isPlaying) {
-                            player.stop()
-                        }
-                    } catch (_: Exception) { /* ignore */
-                    }
-                    player.clearMediaItems()
+        if (queryResponse.code == 422) {
+            val errorBody = queryResponse.body?.string()
+            Log.e("TtsGatewayImpl", "audio_query failed: $errorBody")
+            error("audio_query failed: HTTP ${queryResponse.code}")
+        }
 
-                    // リスナー（終了/エラーを監視）
-                    val listener = object : Player.Listener {
-                        override fun onPlaybackStateChanged(state: Int) {
-                            if (state == Player.STATE_ENDED) {
-                                player.removeListener(this)
-                                // 続きの処理を続ける
-                                if (cont.isActive) cont.resume(Unit)
-                            }
-                        }
+        val synthesisRequestBody = queryResponse.body?.string()
+            ?.toRequestBody("application/json".toMediaType()) ?: error("Empty query response")
 
-                        override fun onPlayerError(error: PlaybackException) {
-                            player.removeListener(this)
-                            if (cont.isActive) cont.resumeWithException(error)
-                        }
-                    }
+        val synthesisStart = System.currentTimeMillis()
 
-                    player.addListener(listener)
+        val synthesisResponse = client.newCall(
+            Request.Builder()
+                .url("$baseUrl/synthesis?speaker=$speakerId")
+                .post(synthesisRequestBody)
+                .header("User-Agent", "okhttp")
+                .build()
+        ).execute()
 
-                    // セットして再生
-                    player.setMediaItem(mediaItem)
-                    player.prepare()
-                    player.play()
+        val synthesisDuration = System.currentTimeMillis() - synthesisStart
+        Log.d("TtsGatewayImpl", "Synthesis took ${synthesisDuration}ms for text: '${text.take(50)}...'")
 
-                    // キャンセル時の後始末
-                    cont.invokeOnCancellation {
-                        // Mainスレッドで安全に停止・リスナー削除
-                        try {
-                            player.removeListener(listener)
-                            player.stop()
-                            player.clearMediaItems()
-                        } catch (_: Exception) {
-                        }
-                    }
-                }
+        if (synthesisResponse.code == 422) {
+            val errorBody = synthesisResponse.body?.string()
+            Log.e("TtsGatewayImpl", "synthesis failed: $errorBody")
+            error("synthesis failed: $errorBody")
+        }
+
+        val timestamp = System.currentTimeMillis()
+        val hash = text.hashCode().toString().replace("-", "n") // 簡易識別子
+        val outputFile = File(context.cacheDir, "tts_${hash}_$timestamp.wav")
+        synthesisResponse.body?.byteStream()?.use { input ->
+            outputFile.outputStream().use { output ->
+                input.copyTo(output)
+                output.flush()
             }
         }
 
-//    private suspend fun fetchSpeakers(): List<SpeakerResponse> = withContext(Dispatchers.IO) {
-//        val response = client.newCall(
-//            Request.Builder()
-//                .url("$baseUrl/speakers")
-//                .get()
-//                .header("User-Agent", "okhttp")
-//                .build()
-//        ).execute()
-//
-//        val body = response.body?.string() ?: error("Empty speaker response")
-//        json.decodeFromString(body)
-//    }
+        Log.d("TtsGatewayImpl", "Generated file: ${outputFile.absolutePath}")
+        return@withContext outputFile
+    }
+
+    suspend fun audioPlay(file: File) = suspendCancellableCoroutine<Unit> { continuation ->
+        if (!file.exists() || file.length() == 0L || !file.canRead()) {
+            Log.e("TtsGatewayImpl", "Invalid file: cannot prepare MediaPlayer")
+            continuation.resume(Unit)
+            return@suspendCancellableCoroutine
+        }
+
+        val player = MediaPlayer()
+        var resumed = false // 再生完了の重複防止
+
+        try {
+            player.setDataSource(file.absolutePath)
+
+            player.setOnCompletionListener {
+                if (!resumed) {
+                    resumed = true
+                    Log.d("TtsGatewayImpl", "Playback completed: ${file.name}")
+                    it.release()
+                    continuation.resume(Unit)
+                }
+            }
+
+            player.setOnErrorListener { _, what, extra ->
+                if (!resumed) {
+                    resumed = true
+                    Log.e("TtsGatewayImpl", "MediaPlayer error: what=$what, extra=$extra")
+                    player.release()
+                    continuation.resume(Unit)
+                }
+                true
+            }
+
+            player.setOnInfoListener { _, what, extra ->
+                Log.w("TtsGatewayImpl", "MediaPlayer info: what=$what, extra=$extra")
+                false
+            }
+
+            player.prepare()
+            player.start()
+            Log.d("TtsGatewayImpl", "Playback started: ${file.name}")
+
+            continuation.invokeOnCancellation {
+                if (!resumed) {
+                    resumed = true
+                    Log.w("TtsGatewayImpl", "Playback cancelled: ${file.name}")
+                    player.stop()
+                    player.release()
+                }
+            }
+
+        } catch (e: IOException) {
+            if (!resumed) {
+                resumed = true
+                Log.e("TtsGatewayImpl", "MediaPlayer prepare failed", e)
+                player.release()
+                continuation.resumeWithException(e)
+            }
+        }
+    }
+
+    private suspend fun fetchSpeakers(): List<SpeakerResponse> = withContext(Dispatchers.IO) {
+        val response = client.newCall(
+            Request.Builder()
+                .url("$baseUrl/speakers")
+                .get()
+                .header("User-Agent", "okhttp")
+                .build()
+        ).execute()
+
+        val body = response.body?.string() ?: error("Empty speaker response")
+        json.decodeFromString(body)
+    }
 
     private fun resolveSpeakerId(
         style: VoiceStyle,
