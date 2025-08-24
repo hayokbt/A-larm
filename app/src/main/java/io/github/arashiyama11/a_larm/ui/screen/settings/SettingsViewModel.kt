@@ -53,7 +53,7 @@ class SettingsViewModel @Inject constructor(
 
     fun ttsTest() {
         viewModelScope.launch {
-            ttsGateway.speak("TTS test message。これはTTSのテストメッセージです", null)
+            //ttsGateway.speak("TTS test message。これはTTSのテストメッセージです")
         }
     }
 

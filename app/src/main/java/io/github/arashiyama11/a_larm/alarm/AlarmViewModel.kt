@@ -5,15 +5,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.arashiyama11.a_larm.domain.AudioOutputGateway
+import io.github.arashiyama11.a_larm.domain.DayBriefGateway
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatSessionGateway
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatState
 import io.github.arashiyama11.a_larm.domain.PersonaRepository
 import io.github.arashiyama11.a_larm.domain.SimpleAlarmAudioGateway
 import io.github.arashiyama11.a_larm.domain.TtsGateway
 import io.github.arashiyama11.a_larm.domain.VoiceChatResponse
+import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
-import io.github.arashiyama11.a_larm.domain.models.DayBrief
 import io.github.arashiyama11.a_larm.domain.models.Role
+import io.github.arashiyama11.a_larm.domain.usecase.CalendarUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,6 +31,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
 import javax.inject.Provider
@@ -61,17 +64,17 @@ class AlarmViewModel @Inject constructor(
     private val llmVoiceChatSessionGatewayProvider: Provider<LlmVoiceChatSessionGateway>,
     private val audioOutputGateway: AudioOutputGateway,
     private val simpleAlarmAudioGateway: SimpleAlarmAudioGateway,
-    private val personaRepository: PersonaRepository
+    private val personaRepository: PersonaRepository,
+    private val calenderUseCase: CalendarUseCase,
+    private val dayBriefGateway: DayBriefGateway
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AlarmUiState())
     lateinit var llmVoiceChatSessionGateway: LlmVoiceChatSessionGateway
     val uiState = _uiState.asStateFlow()
     private var started: Boolean = false
-    private val brief = DayBrief(
-        date = LocalDateTime.now()
-    )
-
     private var simpleAlarmJob: Job? = null
+
+    private lateinit var persona: AssistantPersona
 
     @OptIn(ExperimentalTime::class)
     fun onStart() {
@@ -85,6 +88,8 @@ class AlarmViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            persona = personaRepository.getCurrent()
+
             while (isActive) {
                 val isUserWakeUp = _uiState.value.assistantTalk.filter {
                     Clock.System.now().epochSeconds - it.at.epochSeconds < 30 && it.role == Role.User
@@ -132,7 +137,9 @@ class AlarmViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             val persona = personaRepository.getCurrent()
 
-            llmVoiceChatSessionGateway.initialize(persona, brief, emptyList())
+            val schedule = calenderUseCase.getTodayEvents()
+            val brief = dayBriefGateway.buildBrief(LocalDate.now())
+            llmVoiceChatSessionGateway.initialize(persona, brief, emptyList(), schedule)
         }
         addCloseable {
             runBlocking {
@@ -196,7 +203,7 @@ class AlarmViewModel @Inject constructor(
                             launch {
                                 llmVoiceChatSessionGateway.setTtsPlaying(true)
                                 ttsGateway.speak(res.texts.mapNotNull { if (it.role == Role.Assistant) it.text else null }
-                                    .joinToString("\n"))
+                                    .joinToString("\n"), persona)
                                 delay(500)
                                 llmVoiceChatSessionGateway.setTtsPlaying(false)
                             }

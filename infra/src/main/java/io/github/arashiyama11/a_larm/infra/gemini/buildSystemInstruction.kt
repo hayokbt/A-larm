@@ -1,6 +1,8 @@
 package io.github.arashiyama11.a_larm.infra.gemini
 
+import android.util.Log
 import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
+import io.github.arashiyama11.a_larm.domain.models.CalendarEvent
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.DayBrief
 import io.github.arashiyama11.a_larm.domain.models.Energy
@@ -12,7 +14,8 @@ fun buildSystemInstruction(
     persona: AssistantPersona,
     brief: DayBrief,
     userProfile: UserProfile,
-    history: List<ConversationTurn>
+    history: List<ConversationTurn>,
+    schedule: List<CalendarEvent>
 ): GeminiSystemInstruction {
     val promptBuilder = StringBuilder()
     promptBuilder.append(
@@ -45,19 +48,29 @@ fun buildSystemInstruction(
     promptBuilder.append("""また入力の、<system></system> タグの中身はユーザーの入力でなくシステムの指示です。systemタグの内容に従い、この場合は<user></user><response>あなたのレスポンス</response>の形式で応答し、userタグの中身は空にしてください。""")
 
     promptBuilder.append("\n--- \n")
+    Log.d("buildSystemInstruction", "schedule: $schedule")
     promptBuilder.append(
-        persona.style.systemPromptTemplate.fillTemplate(
+        persona.systemPromptTemplate.fillTemplate(
             name = userProfile.name,
             gender = userProfile.gender.toString(),
             time = brief.date?.toLocalTime()?.toString() ?: "不明",
             weather = brief.weather?.summary ?: "不明",
-            schedule = "",
+            schedule = if (schedule.isEmpty()) {
+                "予定はありません"
+            } else {
+                schedule.joinToString("、") { event ->
+                    val time = event.start.toLocalTime()?.toString() ?: "不明な時間"
+                    "${time}に${event.title}"
+                }
+            },
             response = history.joinToString(" ")
         )
     )
 
     return GeminiSystemInstruction(
-        parts = listOf(GeminiPart(text = promptBuilder.toString()))
+        parts = listOf(GeminiPart(text = promptBuilder.toString().also {
+            Log.d("buildSystemInstruction", "systemPrompt: $it")
+        }))
     )
 }
 

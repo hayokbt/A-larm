@@ -41,7 +41,7 @@ class CalendarSettingsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(isLoading = true)
-                
+
                 // まずカレンダーが利用可能かチェック
                 val isAvailable = localCalendarClient.isCalendarAvailable()
                 if (!isAvailable) {
@@ -52,20 +52,20 @@ class CalendarSettingsViewModel @Inject constructor(
                     )
                     return@launch
                 }
-                
+
                 val calendars = localCalendarClient.getAvailableCalendars()
                 _uiState.value = _uiState.value.copy(
                     availableCalendars = calendars,
                     isLoading = false,
                     error = null
                 )
-                
+
                 if (calendars.isEmpty()) {
                     _uiState.value = _uiState.value.copy(
                         error = "利用可能なカレンダーが見つかりません。Googleアカウントが同期されているか確認してください。"
                     )
                 }
-                
+
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     error = "カレンダー一覧の取得に失敗しました: ${e.message}",
@@ -110,7 +110,7 @@ class CalendarSettingsViewModel @Inject constructor(
                     isTestingConnection = true,
                     error = null
                 )
-                
+
                 // まずカレンダーが利用可能かチェック
                 val isAvailable = localCalendarClient.isCalendarAvailable()
                 if (!isAvailable) {
@@ -121,20 +121,20 @@ class CalendarSettingsViewModel @Inject constructor(
                     )
                     return@launch
                 }
-                
+
                 val result = localCalendarClient.testConnection()
                 _uiState.value = _uiState.value.copy(
                     connectionTestResult = result,
                     isTestingConnection = false,
                     error = null
                 )
-                
+
                 if (!result) {
                     _uiState.value = _uiState.value.copy(
                         error = "カレンダーへの接続に失敗しました。Googleアカウントが同期されているか確認してください。"
                     )
                 }
-                
+
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     error = "接続テストに失敗しました: ${e.message}",

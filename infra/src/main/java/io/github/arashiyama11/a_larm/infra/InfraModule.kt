@@ -23,7 +23,6 @@ import io.github.arashiyama11.a_larm.domain.SttGateway
 import io.github.arashiyama11.a_larm.domain.TtsGateway
 import io.github.arashiyama11.a_larm.domain.CalendarSettingsRepository
 import io.github.arashiyama11.a_larm.domain.UserProfileRepository
-import io.github.arashiyama11.a_larm.infra.calendar.LocalCalendarClient
 import io.github.arashiyama11.a_larm.infra.gemini.LlmVoiceChatSessionGatewayImpl
 import io.github.arashiyama11.a_larm.infra.repository.CalendarSettingsRepositoryImpl
 import io.github.arashiyama11.a_larm.infra.repository.LlmApiKeyRepositoryImpl
@@ -84,7 +83,7 @@ abstract class ApplicationBindsModule {
     @Singleton
     @Binds
     abstract fun bindDayBriefGateway(
-        impl: FakeDayBriefGateway
+        impl: DayBriefGatewayImpl
     ): DayBriefGateway
 
     @Singleton

@@ -33,7 +33,7 @@ android {
             isShrinkResources = false
         }
     }
-    
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -71,6 +71,8 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     implementation(libs.material.icons.extended)
     ksp(libs.hilt.compiler)
+    implementation(libs.coil3.compose)
+    implementation(libs.coil.network.okhttp)
 
     implementation(project(":domain"))
     implementation(project(":infra"))

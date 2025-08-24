@@ -1,6 +1,5 @@
 package io.github.arashiyama11.a_larm.infra.calendar
 
-import android.content.ContentResolver
 import android.content.Context
 import android.database.Cursor
 import android.provider.CalendarContract
@@ -17,7 +16,7 @@ import javax.inject.Singleton
 
 @Singleton
 class LocalCalendarClient @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
     companion object {
         private const val TAG = "LocalCalendarClient"
@@ -35,52 +34,56 @@ class LocalCalendarClient @Inject constructor(
     /**
      * 指定された日付のカレンダーイベントを取得
      */
-    suspend fun getEventsForDate(date: LocalDate): List<CalendarEvent> = withContext(Dispatchers.IO) {
-        try {
-            val contentResolver = context.contentResolver
+    suspend fun getEventsForDate(date: LocalDate): List<CalendarEvent> =
+        withContext(Dispatchers.IO) {
+            try {
+                val contentResolver = context.contentResolver
 
-            // 日付の開始と終了をミリ秒に変換
-            val startOfDay = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-            val endOfDay = date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                // 日付の開始と終了をミリ秒に変換
+                val startOfDay =
+                    date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                val endOfDay =
+                    date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
-            // クエリ条件
-            val selection = "${CalendarContract.Events.DTSTART} >= ? AND ${CalendarContract.Events.DTSTART} < ?"
-            val selectionArgs = arrayOf(startOfDay.toString(), endOfDay.toString())
+                // クエリ条件
+                val selection =
+                    "${CalendarContract.Events.DTSTART} >= ? AND ${CalendarContract.Events.DTSTART} < ?"
+                val selectionArgs = arrayOf(startOfDay.toString(), endOfDay.toString())
 
-            // ソート順（開始時間順）
-            val sortOrder = "${CalendarContract.Events.DTSTART} ASC"
+                // ソート順（開始時間順）
+                val sortOrder = "${CalendarContract.Events.DTSTART} ASC"
 
-            val cursor: Cursor? = contentResolver.query(
-                CalendarContract.Events.CONTENT_URI,
-                CALENDAR_PROJECTION,
-                selection,
-                selectionArgs,
-                sortOrder
-            )
+                val cursor: Cursor? = contentResolver.query(
+                    CalendarContract.Events.CONTENT_URI,
+                    CALENDAR_PROJECTION,
+                    selection,
+                    selectionArgs,
+                    sortOrder
+                )
 
-            cursor?.use {
-                val events = mutableListOf<CalendarEvent>()
+                cursor?.use {
+                    val events = mutableListOf<CalendarEvent>()
 
-                while (it.moveToNext()) {
-                    try {
-                        val event = cursorToCalendarEvent(it)
-                        if (event != null) {
-                            events.add(event)
+                    while (it.moveToNext()) {
+                        try {
+                            val event = cursorToCalendarEvent(it)
+                            if (event != null) {
+                                events.add(event)
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "イベントの変換に失敗: ${e.message}")
                         }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "イベントの変換に失敗: ${e.message}")
                     }
-                }
 
-                Log.d(TAG, "取得したイベント数: ${events.size}")
-                events
-            } ?: emptyList()
+                    Log.d(TAG, "取得したイベント数: ${events.size}")
+                    events
+                } ?: emptyList()
 
-        } catch (e: Exception) {
-            Log.e(TAG, "カレンダーイベント取得エラー", e)
-            emptyList()
+            } catch (e: Exception) {
+                Log.e(TAG, "カレンダーイベント取得エラー", e)
+                emptyList()
+            }
         }
-    }
 
     /**
      * カレンダーへの接続テスト
@@ -107,7 +110,7 @@ class LocalCalendarClient @Inject constructor(
             cursor?.use {
                 val calendarCount = it.count
                 Log.d(TAG, "利用可能なカレンダー数: $calendarCount")
-                
+
                 if (calendarCount > 0) {
                     // カレンダーの詳細情報をログ出力
                     while (it.moveToNext()) {
@@ -116,11 +119,14 @@ class LocalCalendarClient @Inject constructor(
                         val accountName = it.getString(2) ?: "不明"
                         val displayName = it.getString(3) ?: name
                         val visible = it.getInt(4)
-                        
-                        Log.d(TAG, "カレンダー情報: ID=$id, 名前=$name, アカウント=$accountName, 表示名=$displayName, 表示=$visible")
+
+                        Log.d(
+                            TAG,
+                            "カレンダー情報: ID=$id, 名前=$name, アカウント=$accountName, 表示名=$displayName, 表示=$visible"
+                        )
                     }
                 }
-                
+
                 calendarCount > 0
             } ?: false
 
@@ -163,7 +169,10 @@ class LocalCalendarClient @Inject constructor(
                     val visible = it.getInt(4)
                     val accountType = it.getString(5) ?: "不明"
 
-                    Log.d(TAG, "カレンダー検出: ID=$id, 名前=$name, アカウント=$accountName, 表示名=$displayName, 表示=$visible, タイプ=$accountType")
+                    Log.d(
+                        TAG,
+                        "カレンダー検出: ID=$id, 名前=$name, アカウント=$accountName, 表示名=$displayName, 表示=$visible, タイプ=$accountType"
+                    )
 
                     if (visible == 1) {
                         calendars.add(CalendarInfo(id, name, accountName, displayName))
@@ -186,7 +195,7 @@ class LocalCalendarClient @Inject constructor(
     suspend fun isCalendarAvailable(): Boolean = withContext(Dispatchers.IO) {
         try {
             val contentResolver = context.contentResolver
-            
+
             // 基本的なカレンダーアクセス権限をチェック
             val cursor: Cursor? = contentResolver.query(
                 CalendarContract.Calendars.CONTENT_URI,
@@ -195,13 +204,13 @@ class LocalCalendarClient @Inject constructor(
                 null,
                 null
             )
-            
+
             cursor?.use {
                 val count = it.count
                 Log.d(TAG, "カレンダープロバイダーへのアクセス可能: $count")
                 true
             } ?: false
-            
+
         } catch (e: Exception) {
             Log.e(TAG, "カレンダー利用可能性チェック失敗", e)
             false

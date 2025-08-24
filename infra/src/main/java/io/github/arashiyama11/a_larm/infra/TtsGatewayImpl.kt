@@ -1,13 +1,10 @@
 package io.github.arashiyama11.a_larm.infra
 
 import android.content.Context
-import android.media.MediaPlayer
 import android.net.Uri
-import android.util.Log
 import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C.AUDIO_CONTENT_TYPE_SPEECH
-import androidx.media3.common.C.CONTENT_TYPE_SPEECH
 import androidx.media3.common.C.USAGE_MEDIA
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -15,8 +12,8 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.arashiyama11.a_larm.domain.TtsGateway
+import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.VoiceStyle
-import io.github.arashiyama11.a_larm.infra.dto.SpeakRequest
 import io.github.arashiyama11.a_larm.infra.dto.SpeakerResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -25,24 +22,14 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsBytes
-import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
-import java.io.IOException
-import java.net.URLEncoder
 import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -80,10 +67,10 @@ class TtsGatewayImpl @Inject constructor(@ApplicationContext private val context
         }
     }
 
-    override suspend fun speak(text: String, voiceStyle: VoiceStyle?): Unit =
+    override suspend fun speak(text: String, assistantPersona: AssistantPersona): Unit =
         withContext(Dispatchers.IO) {
             // 1) fetch
-            val response = client.post("$baseUrl/api/prompt/1") {
+            val response = client.post("$baseUrl/api/prompt/${assistantPersona.id}") {
                 contentType(io.ktor.http.ContentType.Application.Json)
                 setBody(mapOf("text" to text))
             }

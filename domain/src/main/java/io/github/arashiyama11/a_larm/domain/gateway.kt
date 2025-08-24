@@ -5,8 +5,6 @@ import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.CalendarEvent
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.DayBrief
-import io.github.arashiyama11.a_larm.domain.models.VoiceStyle
-import io.github.arashiyama11.a_larm.domain.models.VolumeRampPolicy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import java.time.LocalDate
@@ -72,7 +70,7 @@ sealed interface SttResult {
 
 interface TtsGateway {
     /** 再生完了までサスペンド。タイムアウトは呼び出し側管理 */
-    suspend fun speak(text: String, voice: VoiceStyle? = null)
+    suspend fun speak(text: String, assistantPersona: AssistantPersona)
 }
 
 interface LlmChatGateway {
@@ -93,7 +91,8 @@ interface LlmVoiceChatSessionGateway {
     suspend fun initialize(
         persona: AssistantPersona,
         brief: DayBrief,
-        history: List<ConversationTurn>
+        history: List<ConversationTurn>,
+        schedule: List<CalendarEvent>
     )
 
     suspend fun stop()

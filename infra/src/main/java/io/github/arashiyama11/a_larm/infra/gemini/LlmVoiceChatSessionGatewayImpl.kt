@@ -15,6 +15,7 @@ import io.github.arashiyama11.a_larm.domain.LlmVoiceChatState
 import io.github.arashiyama11.a_larm.domain.UserProfileRepository
 import io.github.arashiyama11.a_larm.domain.VoiceChatResponse
 import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
+import io.github.arashiyama11.a_larm.domain.models.CalendarEvent
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.DayBrief
 import io.github.arashiyama11.a_larm.domain.models.Gender
@@ -230,7 +231,8 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
     override suspend fun initialize(
         persona: AssistantPersona,
         brief: DayBrief,
-        history: List<ConversationTurn>
+        history: List<ConversationTurn>,
+        schedule: List<CalendarEvent>
     ) {
         try {
             _chatState.value = LlmVoiceChatState.INITIALIZING
@@ -256,7 +258,8 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
                 brief = brief,
                 history = history,
                 userProfile = userProfileRepository.getProfile().firstOrNull()
-                    ?: UserProfile(name = "ユーザー", Gender.OTHER)
+                    ?: UserProfile(name = "ユーザー", Gender.OTHER),
+                schedule = schedule
             )
 
             val setupSuccess = sendMessage(json.encodeToString(setupMessage))
@@ -803,7 +806,8 @@ private fun buildSetupRequest(
     persona: AssistantPersona,
     brief: DayBrief,
     userProfile: UserProfile,
-    history: List<ConversationTurn>
+    history: List<ConversationTurn>,
+    schedule: List<CalendarEvent>
 ): GeminiLiveSetupRequest {
     if (responseAudio) {
         return GeminiLiveSetupRequest(
@@ -820,7 +824,7 @@ private fun buildSetupRequest(
                     )
                 ),
                 systemInstruction = buildSystemInstruction(
-                    persona, brief, userProfile, history,
+                    persona, brief, userProfile, history, schedule
                 )
             )
         )
@@ -828,7 +832,13 @@ private fun buildSetupRequest(
     return GeminiLiveSetupRequest(
         setup = GeminiLiveSetup(
             model = "models/gemini-2.0-flash-exp",
-            systemInstruction = buildSystemInstruction(persona, brief, userProfile, history),
+            systemInstruction = buildSystemInstruction(
+                persona,
+                brief,
+                userProfile,
+                history,
+                schedule
+            ),
             generationConfig = GeminiGenerationConfig(
                 response_modalities = listOf("TEXT"),
             )
