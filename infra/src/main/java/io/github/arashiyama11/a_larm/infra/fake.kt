@@ -1,7 +1,6 @@
 package io.github.arashiyama11.a_larm.infra
 
 import io.github.arashiyama11.a_larm.domain.AlarmRuleRepository
-import io.github.arashiyama11.a_larm.domain.AudioOutputGateway
 import io.github.arashiyama11.a_larm.domain.CalendarReadGateway
 import io.github.arashiyama11.a_larm.domain.ConversationLogRepository
 import io.github.arashiyama11.a_larm.domain.DayBriefGateway
@@ -15,8 +14,13 @@ import io.github.arashiyama11.a_larm.domain.models.CalendarEvent
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.DayBrief
 import io.github.arashiyama11.a_larm.domain.models.SessionId
-import io.github.arashiyama11.a_larm.domain.models.VolumeRampPolicy
+import io.github.arashiyama11.a_larm.infra.calendar.LocalCalendarClient
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.json.Json
 import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
@@ -74,8 +78,11 @@ class FakeConversationLogRepository @Inject constructor() : ConversationLogRepos
 
 }
 
-class FakeCalendarReadGateway @Inject constructor() : CalendarReadGateway {
+class FakeCalendarReadGateway @Inject constructor(
+    private val localCalendarClient: LocalCalendarClient
+) : CalendarReadGateway {
     override suspend fun eventsOn(date: LocalDate): List<CalendarEvent> {
+        return localCalendarClient.getEventsForDate(date)
         // テスト用のダミーデータ
         val now = LocalDateTime.now()
         return listOf(
@@ -96,9 +103,32 @@ class FakeCalendarReadGateway @Inject constructor() : CalendarReadGateway {
 }
 
 
-class FakeDayBriefGateway @Inject constructor() : DayBriefGateway {
+class FakeDayBriefGateway @Inject constructor(
+    private val calendarReadGateway: CalendarReadGateway
+) : DayBriefGateway {
+
+    private val httpClient = HttpClient(CIO) {
+        install(ContentNegotiation) {
+            json(
+                Json {
+                    ignoreUnknownKeys = true
+                    isLenient = true
+                }
+            )
+        }
+    }
+
     override suspend fun buildBrief(forDate: LocalDate): DayBrief {
-        TODO("Not yet implemented")
+        val events = calendarReadGateway.eventsOn(forDate)
+        return DayBrief(
+            date = LocalDateTime.now(),
+            weather = null,
+            calendar = events
+        )
+    }
+
+    companion object {
+        private const val ENDPOINT = "https://weather.tsukumijima.net/api/forecast/city/130010"
     }
 }
 //

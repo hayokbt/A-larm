@@ -55,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -263,8 +264,8 @@ private fun GridCellWeighted(
 ) {
     val color = when (entry.type) {
         RoutineType.NONE -> MaterialTheme.colorScheme.surfaceVariant
-        RoutineType.WAKE -> MaterialTheme.colorScheme.tertiaryContainer
-        RoutineType.SLEEP -> MaterialTheme.colorScheme.primaryContainer
+        RoutineType.WAKE -> Color(0xAACC5C33)
+        RoutineType.SLEEP -> Color(0xAA3949AB)
         RoutineType.TASK -> MaterialTheme.colorScheme.secondaryContainer
     }
 

@@ -1,8 +1,6 @@
 package io.github.arashiyama11.a_larm.domain.models
 
-import java.time.DayOfWeek
 import java.time.Instant
-import java.time.LocalTime
 
 
 data class AlarmRule(

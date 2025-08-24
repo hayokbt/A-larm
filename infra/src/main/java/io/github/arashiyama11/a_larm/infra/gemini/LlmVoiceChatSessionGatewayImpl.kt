@@ -15,6 +15,7 @@ import io.github.arashiyama11.a_larm.domain.LlmVoiceChatState
 import io.github.arashiyama11.a_larm.domain.UserProfileRepository
 import io.github.arashiyama11.a_larm.domain.VoiceChatResponse
 import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
+import io.github.arashiyama11.a_larm.domain.models.CalendarEvent
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.DayBrief
 import io.github.arashiyama11.a_larm.domain.models.Gender
@@ -151,22 +152,6 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
         encodeDefaults = true
     }
 
-    init {
-        scope.launch {
-            var failCount = 0
-            while (isActive) {
-                Log.d(TAG, "Session active: ${webSocketSession?.isActive} ${ttsPlaying.get()}")
-                if (webSocketSession?.isActive == false || webSocketSession == null) {
-                    failCount++
-                    Log.d(TAG, "WebSocket session is not active, attempting to reconnect")
-                    if (failCount > 1) {
-                        _chatState.value = LlmVoiceChatState.ERROR
-                    }
-                }
-                delay(1000)
-            }
-        }
-    }
 
     private var webSocketSession: DefaultClientWebSocketSession? = null
     private var audioRecord: AudioRecord? = null
@@ -225,14 +210,35 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
         gateMultiplier = mult
     }
 
+    private fun startHeartbeat() {
+        coroutineScope.launch {
+            var failCount = 0
+            while (isActive) {
+                Log.d(TAG, "Session active: ${webSocketSession?.isActive} ${ttsPlaying.get()}")
+                if (webSocketSession?.isActive == false || webSocketSession == null) {
+                    failCount++
+                    Log.d(TAG, "WebSocket session is not active, attempting to reconnect")
+                    if (failCount > 2) {
+                        _chatState.value = LlmVoiceChatState.ERROR
+                    }
+                } else {
+                    failCount = 0
+                }
+                delay(1000)
+            }
+        }
+    }
+
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     @OptIn(ExperimentalEncodingApi::class)
     override suspend fun initialize(
         persona: AssistantPersona,
         brief: DayBrief,
-        history: List<ConversationTurn>
+        history: List<ConversationTurn>,
+        schedule: List<CalendarEvent>
     ) {
         try {
+            startHeartbeat()
             _chatState.value = LlmVoiceChatState.INITIALIZING
             Log.d(TAG, "Initializing Gemini Live API session")
 
@@ -256,7 +262,8 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
                 brief = brief,
                 history = history,
                 userProfile = userProfileRepository.getProfile().firstOrNull()
-                    ?: UserProfile(name = "ユーザー", Gender.OTHER)
+                    ?: UserProfile(name = "ユーザー", Gender.OTHER),
+                schedule = schedule
             )
 
             val setupSuccess = sendMessage(json.encodeToString(setupMessage))
@@ -803,7 +810,8 @@ private fun buildSetupRequest(
     persona: AssistantPersona,
     brief: DayBrief,
     userProfile: UserProfile,
-    history: List<ConversationTurn>
+    history: List<ConversationTurn>,
+    schedule: List<CalendarEvent>
 ): GeminiLiveSetupRequest {
     if (responseAudio) {
         return GeminiLiveSetupRequest(
@@ -820,7 +828,7 @@ private fun buildSetupRequest(
                     )
                 ),
                 systemInstruction = buildSystemInstruction(
-                    persona, brief, userProfile, history,
+                    persona, brief, userProfile, history, schedule
                 )
             )
         )
@@ -828,7 +836,13 @@ private fun buildSetupRequest(
     return GeminiLiveSetupRequest(
         setup = GeminiLiveSetup(
             model = "models/gemini-2.0-flash-exp",
-            systemInstruction = buildSystemInstruction(persona, brief, userProfile, history),
+            systemInstruction = buildSystemInstruction(
+                persona,
+                brief,
+                userProfile,
+                history,
+                schedule
+            ),
             generationConfig = GeminiGenerationConfig(
                 response_modalities = listOf("TEXT"),
             )

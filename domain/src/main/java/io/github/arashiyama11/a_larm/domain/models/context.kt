@@ -58,8 +58,6 @@ data class CalendarEvent(
 
 data class WeatherBrief(
     val summary: String,           // "晴れのち曇り"
-    val tempC: Double?,            // 現在 or 朝の予報
-    val precipitationChance: Int?  // %
 )
 
 @OptIn(ExperimentalTime::class)

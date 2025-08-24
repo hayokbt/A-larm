@@ -3,15 +3,11 @@ package io.github.arashiyama11.a_larm.ui.screen.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import io.github.arashiyama11.a_larm.domain.LlmChatGateway
-import io.github.arashiyama11.a_larm.domain.LlmChunk
 import io.github.arashiyama11.a_larm.domain.PersonaRepository
 import io.github.arashiyama11.a_larm.domain.RoutineRepository
 import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.DayBrief
-import io.github.arashiyama11.a_larm.domain.models.PromptStyle
-import io.github.arashiyama11.a_larm.domain.models.Role
 import io.github.arashiyama11.a_larm.domain.models.RoutineMode
 import io.github.arashiyama11.a_larm.domain.usecase.AlarmRulesUseCase
 import kotlinx.coroutines.delay
@@ -28,7 +24,6 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.ExperimentalTime
 
 data class HomeUiState(
     val nextAlarm: String = "--:--",

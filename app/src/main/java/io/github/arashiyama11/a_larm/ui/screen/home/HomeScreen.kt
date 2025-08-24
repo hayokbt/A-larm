@@ -1,6 +1,5 @@
 package io.github.arashiyama11.a_larm.ui.screen.home
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Assistant
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.Button
@@ -41,13 +41,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
 import io.github.arashiyama11.a_larm.R
 import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import java.time.LocalTime
@@ -245,14 +246,22 @@ private fun EnhancedPersonaCard(
             verticalArrangement = Arrangement.Center
         ) {
             // キャラクター画像
-            Image(
-                painter = painterResource(id = getCharacterImageResource(persona.id)),
-                contentDescription = persona.displayName,
-                modifier = Modifier
-                    .size(100.dp)
-                    .clip(RoundedCornerShape(12.dp)),
-                contentScale = ContentScale.Crop
-            )
+            if (persona.imageUrl != null) {
+                AsyncImage(
+                    model = persona.imageUrl,
+                    contentDescription = persona.displayName,
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop,
+                    placeholder = rememberVectorPainter(Icons.Default.Assistant)
+                )
+            } else {
+                Icon(
+                    Icons.Filled.Person, null,
+                    modifier = Modifier.size(100.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -269,7 +278,7 @@ private fun EnhancedPersonaCard(
 
             // キャラクターの特徴
             Text(
-                text = getCharacterDescription(persona.id),
+                text = persona.description,
                 style = MaterialTheme.typography.bodySmall,
                 color = if (isSelected) {
                     MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
@@ -280,18 +289,6 @@ private fun EnhancedPersonaCard(
                 maxLines = 2
             )
         }
-    }
-}
-
-// キャラクターIDに対応する説明文を取得するヘルパー関数
-private fun getCharacterDescription(personaId: String): String {
-    return when (personaId) {
-        "athletic_character" -> "元気で前向き\n体育会系"
-        "gentle_character" -> "優しく穏やか\nお母さん系"
-        "older_character" -> "大人の魅力\nお姉さん系"
-        "tsundere_character" -> "照れ屋で\nツンデレ"
-        "younger_character" -> "明るく活発\n妹系"
-        else -> "キャラクター"
     }
 }
 
