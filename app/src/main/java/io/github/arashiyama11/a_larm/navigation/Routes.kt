@@ -6,5 +6,7 @@ sealed class Screen(val route: String) {
     data object Home : Screen("home")
 
     data object ApiKeySetting : Screen("api_key_setting")
+
+    data object CalendarSettings : Screen("calendar_settings")
 }
 

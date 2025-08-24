@@ -26,6 +26,7 @@ import io.github.arashiyama11.a_larm.ui.components.UserProfileForm
 fun SettingsScreen(
     settingsViewModel: SettingsViewModel = hiltViewModel(),
     navigateToApiKeySetting: () -> Unit,
+    navigateToCalendarSettings: () -> Unit,
 ) {
     val uiState by settingsViewModel.uiState.collectAsStateWithLifecycle()
     Column(
@@ -51,6 +52,8 @@ fun SettingsScreen(
         Slider(value = uiState.volume, onValueChange = { /* no-op */ })
         Spacer(Modifier.height(16.dp))
         Button(onClick = navigateToApiKeySetting) { Text("APIキー管理") }
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = navigateToCalendarSettings) { Text("カレンダー設定") }
         Spacer(Modifier.height(16.dp))
         Button(onClick = { /* プライバシー */ }) { Text("プライバシー") }
         Spacer(Modifier.height(16.dp))

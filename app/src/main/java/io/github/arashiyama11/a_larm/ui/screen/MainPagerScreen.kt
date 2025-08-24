@@ -25,6 +25,7 @@ private enum class MainTab(val title: String) {
 @Composable
 fun MainPagerScreen(
     navigateToApiKeySetting: () -> Unit,
+    navigateToCalendarSettings: () -> Unit,
 ) {
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { MainTab.entries.size })
     val scope = rememberCoroutineScope()
@@ -51,7 +52,10 @@ fun MainPagerScreen(
                     }
 
                     MainTab.Settings -> {
-                        SettingsScreen(navigateToApiKeySetting = navigateToApiKeySetting)
+                        SettingsScreen(
+                            navigateToApiKeySetting = navigateToApiKeySetting,
+                            navigateToCalendarSettings = navigateToCalendarSettings
+                        )
                     }
                 }
             }

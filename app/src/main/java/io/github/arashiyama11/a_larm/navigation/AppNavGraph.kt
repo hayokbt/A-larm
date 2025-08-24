@@ -9,6 +9,7 @@ import io.github.arashiyama11.a_larm.ui.screen.fallback.FallbackAlarmScreen
 import io.github.arashiyama11.a_larm.ui.screen.fallback.FallbackAlarmViewModel
 import io.github.arashiyama11.a_larm.ui.screen.MainPagerScreen
 import io.github.arashiyama11.a_larm.ui.screen.apikey.LlmApiKeyScreen
+import io.github.arashiyama11.a_larm.ui.screen.calendar.CalendarSettingsScreen
 import io.github.arashiyama11.a_larm.ui.screen.onboarding.OnboardingScreen
 import io.github.arashiyama11.a_larm.ui.screen.session.SessionScreen
 import io.github.arashiyama11.a_larm.ui.screen.session.SessionViewModel
@@ -26,15 +27,22 @@ fun AppNavGraph(
         }
         
         composable(Screen.Home.route) {
-            MainPagerScreen {
-                navController.navigate(Screen.ApiKeySetting.route)
-            }
+            MainPagerScreen(
+                navigateToApiKeySetting = { navController.navigate(Screen.ApiKeySetting.route) },
+                navigateToCalendarSettings = { navController.navigate(Screen.CalendarSettings.route) }
+            )
         }
 
         composable(Screen.ApiKeySetting.route) {
             LlmApiKeyScreen {
                 navController.popBackStack()
             }
+        }
+
+        composable(Screen.CalendarSettings.route) {
+            CalendarSettingsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
     }
 }
