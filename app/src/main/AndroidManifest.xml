@@ -30,6 +30,10 @@
     <!-- Boot completed for re-scheduling alarms -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Calendar access -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+
     <application
         android:name=".MainApplication"
         android:allowBackup="true"

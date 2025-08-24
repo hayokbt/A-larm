@@ -18,6 +18,7 @@ import io.github.arashiyama11.a_larm.domain.models.SessionId
 import io.github.arashiyama11.a_larm.domain.models.VolumeRampPolicy
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
+import java.time.LocalDateTime
 import javax.inject.Inject
 
 class FakeAlarmRuleRepository @Inject constructor() : AlarmRuleRepository {
@@ -75,7 +76,22 @@ class FakeConversationLogRepository @Inject constructor() : ConversationLogRepos
 
 class FakeCalendarReadGateway @Inject constructor() : CalendarReadGateway {
     override suspend fun eventsOn(date: LocalDate): List<CalendarEvent> {
-        TODO("Not yet implemented")
+        // テスト用のダミーデータ
+        val now = LocalDateTime.now()
+        return listOf(
+            CalendarEvent(
+                title = "テストイベント1",
+                start = now.withHour(9).withMinute(0).withSecond(0),
+                end = now.withHour(10).withMinute(0).withSecond(0),
+                location = "会議室A"
+            ),
+            CalendarEvent(
+                title = "テストイベント2",
+                start = now.withHour(15).withMinute(30).withSecond(0),
+                end = now.withHour(16).withMinute(30).withSecond(0),
+                location = "オフィス"
+            )
+        )
     }
 }
 
