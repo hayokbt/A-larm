@@ -1,6 +1,5 @@
 package io.github.arashiyama11.a_larm.alarm
 
-import android.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,9 +18,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Assistant
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ButtonElevation
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -36,13 +35,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
 import io.github.arashiyama11.a_larm.domain.LlmVoiceChatState
+import io.github.arashiyama11.a_larm.domain.models.AssistantPersona
 import io.github.arashiyama11.a_larm.domain.models.ConversationTurn
 import io.github.arashiyama11.a_larm.domain.models.Role
 import io.github.arashiyama11.a_larm.ui.theme.AlarmTheme
@@ -127,7 +130,8 @@ fun AlarmScreen(
                 turns = uiState.assistantTalk,
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
+                assistantPersona = uiState.assistantPersona
             )
             // --- ここまで会話リスト ---
 
@@ -144,16 +148,26 @@ fun AlarmScreen(
             OutlinedButton(
                 onClick = { finish() },
                 enabled = uiState.closeButtonEnabled,
-                modifier = Modifier,
+                modifier = Modifier.padding(bottom = 16.dp),
                 contentPadding = PaddingValues(12.dp),
                 elevation = ButtonDefaults.buttonElevation()
-            ) { Text("停止", modifier = Modifier, style = MaterialTheme.typography.displaySmall) }
+            ) {
+                Text(
+                    "ストップ",
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.displaySmall
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun ChatList(turns: List<ConversationTurn>, modifier: Modifier = Modifier) {
+private fun ChatList(
+    turns: List<ConversationTurn>,
+    modifier: Modifier = Modifier,
+    assistantPersona: AssistantPersona?
+) {
     val messages = remember(turns) { turns.asReversed() }
     val listState = rememberLazyListState()
 
@@ -173,14 +187,14 @@ private fun ChatList(turns: List<ConversationTurn>, modifier: Modifier = Modifie
         modifier = modifier
     ) {
         items(items = messages, key = { it.hashCode() }) { turn ->
-            ChatRow(turn = turn)
+            ChatRow(turn = turn, assistantPersona)
             Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
 
 @Composable
-private fun ChatRow(turn: ConversationTurn) {
+private fun ChatRow(turn: ConversationTurn, assistantPersona: AssistantPersona?) {
     val isUser = when (turn.role) {
         Role.User -> true
         Role.Assistant -> false
@@ -194,16 +208,20 @@ private fun ChatRow(turn: ConversationTurn) {
     ) {
         if (!isUser) {
             // Assistant: avatar on left
-            ChatBubble(turn = turn, alignLeft = true)
+            ChatBubble(turn = turn, alignLeft = true, assistantPersona)
         } else {
             // User: bubble on right
-            ChatBubble(turn = turn, alignLeft = false)
+            ChatBubble(turn = turn, alignLeft = false, assistantPersona)
         }
     }
 }
 
 @Composable
-private fun ChatBubble(turn: ConversationTurn, alignLeft: Boolean) {
+private fun ChatBubble(
+    turn: ConversationTurn,
+    alignLeft: Boolean,
+    assistantPersona: AssistantPersona?
+) {
     val textColor = MaterialTheme.colorScheme.onSurfaceVariant
     val shape = RoundedCornerShape(12.dp)
     if (turn.text.isBlank()) return
@@ -216,7 +234,7 @@ private fun ChatBubble(turn: ConversationTurn, alignLeft: Boolean) {
     ) {
         if (alignLeft) {
             // small icon + bubble
-            RoleIcon(turn.role)
+            RoleIcon(turn.role, assistantPersona)
             Spacer(Modifier.width(8.dp))
             Surface(
                 tonalElevation = 2.dp,
@@ -226,7 +244,7 @@ private fun ChatBubble(turn: ConversationTurn, alignLeft: Boolean) {
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = roleLabel(turn.role),
+                        text = roleLabel(turn.role, assistantPersona),
                         style = MaterialTheme.typography.labelSmall,
                         color = textColor//MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -248,7 +266,7 @@ private fun ChatBubble(turn: ConversationTurn, alignLeft: Boolean) {
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = roleLabel(turn.role),
+                        text = roleLabel(turn.role, assistantPersona),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f)
                     )
@@ -261,32 +279,45 @@ private fun ChatBubble(turn: ConversationTurn, alignLeft: Boolean) {
                 }
             }
             Spacer(Modifier.width(8.dp))
-            RoleIcon(turn.role)
+            RoleIcon(turn.role, assistantPersona)
         }
     }
 }
 
 @Composable
-private fun RoleIcon(role: Role) {
-    val label = when (role) {
-        Role.User -> "U"
-        Role.Assistant -> "A"
-        Role.System -> "S"
-    }
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text = label, style = MaterialTheme.typography.labelMedium)
+private fun RoleIcon(role: Role, assistantPersona: AssistantPersona?) {
+    if (role == Role.Assistant && assistantPersona?.imageUrl != null) {
+        AsyncImage(
+            model = assistantPersona.imageUrl,
+            contentDescription = "Assistant Avatar",
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            placeholder = rememberVectorPainter(Icons.Default.Assistant),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        val label = when (role) {
+            Role.User -> "U"
+            Role.Assistant -> "A"
+            Role.System -> "S"
+        }
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = label, style = MaterialTheme.typography.labelMedium)
+        }
     }
 }
 
-private fun roleLabel(role: Role): String = when (role) {
+private fun roleLabel(role: Role, assistantPersona: AssistantPersona?): String = when (role) {
     Role.User -> "あなた"
-    Role.Assistant -> "アシスタント"
+    Role.Assistant -> assistantPersona?.displayName ?: "アシスタント"
     Role.System -> "システム"
 }
 

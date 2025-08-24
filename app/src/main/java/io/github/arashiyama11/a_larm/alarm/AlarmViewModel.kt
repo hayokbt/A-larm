@@ -51,6 +51,7 @@ data class AlarmUiState(
     val startAt: LocalDateTime? = null,
     val assistantTalk: List<ConversationTurn> = emptyList(),
     val closeButtonEnabled: Boolean = false,
+    val assistantPersona: AssistantPersona? = null,
 )
 
 sealed interface AlarmUiAction {
@@ -89,6 +90,11 @@ class AlarmViewModel @Inject constructor(
 
         viewModelScope.launch {
             persona = personaRepository.getCurrent()
+            _uiState.update {
+                it.copy(
+                    assistantPersona = persona
+                )
+            }
 
             while (isActive) {
                 val isUserWakeUp = _uiState.value.assistantTalk.filter {

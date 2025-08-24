@@ -152,22 +152,6 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
         encodeDefaults = true
     }
 
-    init {
-        scope.launch {
-            var failCount = 0
-            while (isActive) {
-                Log.d(TAG, "Session active: ${webSocketSession?.isActive} ${ttsPlaying.get()}")
-                if (webSocketSession?.isActive == false || webSocketSession == null) {
-                    failCount++
-                    Log.d(TAG, "WebSocket session is not active, attempting to reconnect")
-                    if (failCount > 1) {
-                        _chatState.value = LlmVoiceChatState.ERROR
-                    }
-                }
-                delay(1000)
-            }
-        }
-    }
 
     private var webSocketSession: DefaultClientWebSocketSession? = null
     private var audioRecord: AudioRecord? = null
@@ -226,6 +210,25 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
         gateMultiplier = mult
     }
 
+    private fun startHeartbeat() {
+        coroutineScope.launch {
+            var failCount = 0
+            while (isActive) {
+                Log.d(TAG, "Session active: ${webSocketSession?.isActive} ${ttsPlaying.get()}")
+                if (webSocketSession?.isActive == false || webSocketSession == null) {
+                    failCount++
+                    Log.d(TAG, "WebSocket session is not active, attempting to reconnect")
+                    if (failCount > 2) {
+                        _chatState.value = LlmVoiceChatState.ERROR
+                    }
+                } else {
+                    failCount = 0
+                }
+                delay(1000)
+            }
+        }
+    }
+
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     @OptIn(ExperimentalEncodingApi::class)
     override suspend fun initialize(
@@ -235,6 +238,7 @@ class LlmVoiceChatSessionGatewayImpl @Inject constructor(
         schedule: List<CalendarEvent>
     ) {
         try {
+            startHeartbeat()
             _chatState.value = LlmVoiceChatState.INITIALIZING
             Log.d(TAG, "Initializing Gemini Live API session")
 

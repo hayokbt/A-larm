@@ -13,10 +13,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import java.time.LocalDateTime
 import java.time.ZoneId
-import java.util.Date
 import javax.inject.Inject
 import javax.inject.Singleton
 import androidx.core.net.toUri
+import java.time.format.DateTimeFormatter
 
 @Singleton
 class AlarmScheduler @Inject constructor(
@@ -31,7 +31,7 @@ class AlarmScheduler @Inject constructor(
         require(timeMillis >= System.currentTimeMillis()) { "Cannot schedule an alarm in the past" }
         val id = requireNotNull(payload) { "AlarmId is required to uniquely schedule/cancel" }
 
-        val label = "Alarm at ${at.toLocalTime()}"
+        val label = "Alarm at ${at.format(DateTimeFormatter.ofPattern("HH:mm"))}"
         val req = reqCodeOf(id)
         Log.d(
             "AlarmScheduler",
